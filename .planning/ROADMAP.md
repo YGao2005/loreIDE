@@ -330,5 +330,5 @@ Phases execute in numeric order; Phase 5 can run in parallel with Phase 3 after 
 | 9. Mass Edit + Non-Coder Mode + Demo Repo Seeding (with Babel Plugin + Flow Contracts) | 7/8 | In Progress|  |
 | 10. Session Watcher + Filter Pipeline | 4/4 | Complete    | 2026-04-25 |
 | 11. Distiller + Constraint Store + Contract-Anchored Retrieval | 4/5 | In Progress|  |
-| 12. Conflict / Supersession Engine | 0/4 | Not started | - |
+| 12. Conflict / Supersession Engine | 1/4 | In Progress|  |
 | 13. Substrate UI + New Visual Model + Demo Polish | 0/12 | Plans created (replanned 2026-04-25; revised post-checker 2026-04-25 — 13-10 split into 10a/10b) | - |

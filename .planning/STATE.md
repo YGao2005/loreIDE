@@ -5,26 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-04-24)
 
 **Core value:** A developer or PM can locate any piece of the product by intent, edit its contract, and have the agent produce the corresponding code change — without touching the file tree.
-**Current focus:** Phase 9 code-shipped complete (2026-04-25): all 10 requirements (MASS-01/02, NONC-01, DEMO-01/02/03, BABEL-01, JSX-01, FLOW-01, BACKEND-FM-01) shipped across 09-01 through 09-06. UAT execution (09-UAT.md, 9 tests, 3 runs) is the standing post-execution gate for Phase 9 formal closure. Phase 11 Plans 01–03 also complete (2026-04-25): substrate schema migration + distiller pipeline + 3 MCP tools + contract-anchored retrieval (lineage scope + cousin-exclusion FTS5 + LLM rerank) all shipped. SUB-03 + SUB-04 requirements closed. Plan 11-04 (Delegate button) and Plan 11-05 (Substrate panel + UAT) outstanding — both have human-verify checkpoints.
+**Current focus:** Phase 12 Plan 01 complete (2026-04-25). Foundation for the conflict/supersession engine landed: migration v7 (intent_drift_* columns + priority_shifts + intent_drift_verdicts tables + CHECK constraints), supersession::types Rust module (Verdict enum + ParsedVerdict + SubstrateNode + DescendantNode + IntentDriftResult — the shared types 12-02/03/04 import from), canonical SUB-06 + SUB-07 in REQUIREMENTS.md under new "Conflict / Supersession Engine (Phase 12)" subsection. 12-02 (fact engine) + 12-03 (intent engine) can run in parallel as Wave 2. Phase 9 code-shipped complete; Phase 11 Plans 01–04 complete (Plan 11-05 Substrate panel + UAT outstanding).
 
 ## Current Position
 
-Phase: 11 of 13 (Distiller + Constraint Store + Contract-Anchored Retrieval) — IN PROGRESS
-Plan: 3 of 5 complete in current phase
-Status: Phase 11 Plans 01–03 COMPLETE (2026-04-25).
-- Plan 11-01: Migration v6 (phase11_substrate_schema) + distiller module skeleton (state.rs/types.rs). Commits d1ba20c, 6749fda, 998947d.
-- Plan 11-02: distiller pipeline (claude -p --bare + --json-schema, 5-kind extraction, anchored_uuids LLM-emitted with repo-lineage fallback, per-session DistillerLocks, dead-letter queue, deterministic SHA-256 UUIDs); Phase 10 ingestor patched to emit episode:ingested; 3 MCP tools (find_constraints_for_goal, find_decisions_about, open_questions); SC 3 kernel regression fixture + integration test. Commits da64811, 136ff13, fba8778, 53c8317. Process note: ran across two executor agents due to stream idle timeouts — atomic-commit discipline made resume safe.
-- Plan 11-03: contract-anchored retrieval — lineage scope walker (recursive CTE, cousins excluded structurally) + candidate_selection (FTS5 + json_each(anchored_uuids) JOIN + RRF k=60 + zero-hit fallback) + LLM rerank (claude -p --bare listwise top-15→top-5 + 3-level defensive parser) + private find_substrate_for_atom Tauri command + 5 unit tests (lineage walker, cousin-exclusion JOIN, RRF, defensive parser, L0 edge case). SUB-04 closed. Commits a367d38, 2bfb7f5, b79ca51, c9f5e31.
-Last activity: 2026-04-25 — Wave 2 complete. Wave 3 (Plan 11-04 Delegate button) up next; has human-verify checkpoint for Beat 1 demo flow.
+Phase: 12 of 13 (Conflict / Supersession Engine) — IN PROGRESS
+Plan: 1 of 4 complete in current phase
+Status: Phase 12 Plan 01 COMPLETE (2026-04-25). Foundation landed: migration v7 (phase12_supersession_layer) — adds intent_drift_* columns to substrate_nodes via ALTER TABLE + creates priority_shifts and intent_drift_verdicts tables with CHECK constraints + composite edge-type lookup index. supersession::types module exports Verdict (3-value enum: Drifted/NotDrifted/NeedsHumanReview), ParsedVerdict, SubstrateNode (sqlx::FromRow), DescendantNode, IntentDriftResult — the shared types every 12-02/03/04 plan imports. REQUIREMENTS.md gained canonical SUB-06 + SUB-07 entries under new "Conflict / Supersession Engine (Phase 12)" subsection (transcribed from 12-RESEARCH.md, no invention). Commits 59fbb4b, 0a92a68. 71/71 tests pass; clippy clean.
+Last activity: 2026-04-25 — Phase 12 Wave 1 (foundation) complete. Wave 2 next: 12-02 (fact engine) + 12-03 (intent engine) can run in parallel atop this schema.
 
-Progress: [█████████░] 88% (7/13 phases complete + Phase 10 4/4 — Phases 1, 2, 3, 5, 6, 7, 10 complete; Phase 4 partially landed; Phase 8 implementation done pending UAT; Phase 9 code-shipped 8/8 plans — 09-01, 09-02, 09-03, 09-04, 09-04b, 09-04c, 09-05, 09-06 all done; UAT execution (09-UAT.md) is the Phase 9 closure gate)
+Progress: [█████████░] 89% (7/13 phases complete + Phase 10 4/4 + Phase 11 Wave 2 complete + Phase 12 1/4 — Phases 1, 2, 3, 5, 6, 7, 10 complete; Phase 4 partially landed; Phase 8 implementation done pending UAT; Phase 9 code-shipped 8/8 plans; Phase 11 Plans 01–04 complete (11-05 outstanding); Phase 12 Plan 01 (foundation) complete; UAT execution (09-UAT.md) is the Phase 9 closure gate)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 12
+- Total plans completed: 13
 - Average duration: ~30min
-- Total execution time: ~319min
+- Total execution time: ~324min
 
 **By Phase:**
 
@@ -76,6 +73,7 @@ Progress: [█████████░] 88% (7/13 phases complete + Phase 10 
 | Phase 11 P04 | 30 | 3 tasks | 18 files |
 | Phase 09-mass-edit-non-coder-mode-demo-repo-seeding P05 | 8 | 2 tasks | 9 files |
 | Phase 09-mass-edit-non-coder-mode-demo-repo-seeding P06 | 25 | 2 tasks (T4 deferred) | 4 files |
+| Phase 12-conflict-supersession-engine P01 | 5min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -279,6 +277,11 @@ Recent decisions affecting current work:
 - [Phase 11]: SimplifiedInspector DelegateToAgentButton stub replaced with real DelegateButton (store-driven)
 - [Phase 09-05]: Token count interpretation: input_tokens=25-32 (fresh prompt), cache_read=518k-863k (full codebase); pre-estimate of ~7,200 was pre-repo-build; delta claim holds at tool_calls level
 - [Phase 09-05]: Baseline JSONL field: .message.usage.input_tokens on type=assistant rows; tool_calls counted from .message.content[].type==tool_use
+- [Phase 12-01]: Migration v7 (not v5) — v5/v6 already taken by Phase 9/Phase 11; v7 is the next free version per plugin immutability rule
+- [Phase 12-01]: ALTER TABLE ADD COLUMN strategy for intent_drift_* fields — Phase 11 v6 already shipped substrate_nodes WITHOUT them; CREATE TABLE IF NOT EXISTS would silently no-op
+- [Phase 12-01]: Verdict enum SCREAMING_SNAKE_CASE serde rename matches the SQLite CHECK constraint string verbatim — single canonical string at every boundary
+- [Phase 12-01]: Composite edge index suffixed _lookup to avoid collision with Phase 11 v6's idx_substrate_edges_type
+- [Phase 12-01]: REQUIREMENTS.md count stays at 70 — SUB-06/07 stubs were already counted; collapsing into canonical entries is net-zero
 
 ### Pending Todos
 
@@ -309,5 +312,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-04-25
-Stopped at: Completed 09-06-PLAN.md — Phase 9 code-shipped complete. All 10 requirements (MASS-01/02, NONC-01, DEMO-01/02/03, BABEL-01, JSX-01, FLOW-01, BACKEND-FM-01) shipped across 09-01 through 09-06. Source-session JSONL (40-turn deletion-incident synthetic session) + 09-UAT.md (9 tests, 3-run rehearsal log) authored and committed. Task 4 (UAT execution) deferred as standing post-execution gate. Phase 11 Plans 11-01 through 11-04 also complete; Plan 11-05 (Substrate panel + UAT) outstanding.
-Resume file: 09-05-PLAN.md (Wave 3). Phase 9 progress: 6/8 plans complete. Phase 11 (Distiller + Retrieval) work has been progressing in parallel — Plans 11-01, 11-02, 11-03 commits visible (managed elsewhere). `/gsd:execute-phase 9` resumes from 09-05 if re-invoked.
+Stopped at: Completed 12-01-PLAN.md — Phase 12 foundation: migration v7 supersession_layer + supersession::types module + canonical SUB-06/SUB-07 in REQUIREMENTS.md. 71/71 tests pass; clippy clean. Wave 2 next: 12-02 (fact engine) + 12-03 (intent engine) can run in parallel atop the schema landed by 12-01.
+Resume file: 12-02-PLAN.md or 12-03-PLAN.md (Wave 2 — both can begin). `/gsd:execute-phase 12` resumes from 12-02 if re-invoked. Concurrent outstanding: Phase 9 UAT (09-UAT.md) and Plan 11-05 (Substrate panel + UAT) — both have human-verify checkpoints.
