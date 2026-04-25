@@ -113,7 +113,7 @@ The 2026-04-24 visual model lock supersedes Phase 3's abstract-zoom treatment wi
 - [ ] **CARD-03** (Backend trigger types beyond HTTP): Render mode adapts by trigger `kind` — CLI command card (terminal frame with `$ tool subcommand --flag` + flag/argument schemas); cron schedule card (`cron: 0 * * * *  →  handler`); webhook event card (`event: stripe.customer.subscription.deleted`); GraphQL resolver schema card; gRPC RPC method/proto card; library function syntax-highlighted signature card. Each is a variant of CARD-02's structured rendering with a kind-specific header. (Phase 13)
 - [ ] **CHIP-01** (Atom chip — UI mode): For each L4 atom whose `code_ranges` point into the screen rendered by CARD-01, an overlay chip is positioned over the matched JSX element (resolved via BABEL-01 `data-contract-uuid` injection). Chip shows: atom name (collapsed), decision count, drift/rollup-state indicator. Hover lights chip; click opens atom inspector. (Phase 13)
 - [ ] **CHIP-02** (Atom chip — Backend mode): For each L4 atom anchored to a backend participant, a chip renders beside the EndpointCard / ServiceCard (CARD-02). Same hover/click semantics as CHIP-01. (Phase 13)
-- [ ] **CHIP-03** (Atom chip — substrate state coloring): Chips render substrate-state coloring (`fresh / stale / superseded / intent-drifted`) above the existing code-drift coloring. Precedence red > orange > amber > gray when multiple states apply on the same chip. Reuses Phase 8 PROP-02 amber/gray CVA tokens; orange and red are existing. (Phase 13)
+- [x] **CHIP-03** (Atom chip — substrate state coloring): Chips render substrate-state coloring (`fresh / stale / superseded / intent-drifted`) above the existing code-drift coloring. Precedence red > orange > amber > gray when multiple states apply on the same chip. Reuses Phase 8 PROP-02 amber/gray CVA tokens; orange and red are existing. (Phase 13)
 - [ ] **CHAIN-01** (L2 vertical participant chain): A flow's L2 view renders `flow.members` (FLOW-01) top-to-bottom — trigger card at top + participant cards below in invocation order. Layout is deterministic given members order; renders at 50+ fps with 1 iframe + 6–8 service cards. Performance constraint: at most one *live* iframe per canvas (Beat 4's two-flow case shows the unfocused flow's iframe as a screenshot). (Phase 13)
 - [ ] **CHAIN-02** (Call-shape edge labels): Edges between consecutive participants in a flow chain render call-shape labels derived from each participant's `## Outputs` (BACKEND-FM-01) → next participant's `## Inputs`. Mismatched / unmappable schemas render as `?` or are omitted; never render garbage. The label teaches the caller's mental model on the way down the chain. (Phase 13)
 - [ ] **SIDEBAR-01** (Sidebar replacing L0/L1 zoom): Left sidebar renders the repository tree by area; per-area drift / rollup-stale / intent-drifted counts visible as small badges; flows under each area expandable. Replaces the L0/L1 abstract-zoom canvas surface entirely; the canvas no longer renders L0/L1 directly. (Phase 13)
@@ -129,7 +129,7 @@ The 2026-04-24 visual model lock supersedes Phase 3's abstract-zoom treatment wi
 - [x] **SUB-03**: Distiller LLM extracts ≥5 typed nodes (Constraint, Decision, OpenQuestion, ResolvedQuestion, Attempt) per completed session with full provenance (`session_id`, `turn_ref`, `verbatim_quote`, `actor`, `confidence`); kernel-experiment fixture reproduces the 14 hand-extracted constraints (Phase 11)
 - [x] **SUB-04**: Contract-anchored retrieval returns top-3 results within ranking on the seeded 50-constraint substrate; `find_constraints_for_goal` scopes candidates by graph edges from contract lineage before semantic match; LLM rerank uses the contract body as grounding (Phase 11)
 - [x] **SUB-05**: `Delegate to agent` Inspector button composes prompt with retrieved substrate hits + parent-surface context + lineage-scoped neighbors; dispatches via MCP to a coding agent; replaces chat-panel-as-prompt-entry for contract-driven work (Phase 11; demo-load-bearing for Beat 1 → Beat 2 transition)
-- [ ] **SUB-08**: Substrate UI surface — Cmd+P by intent (semantic match across all substrate node types **including flows**, ≥80% top-1 precision on 10 ambient queries; selecting a flow lands at L2 view per CHAIN-01, selecting an atom lands at L3 view with its chip auto-focused per CHIP-01/02); canvas substrate-state overlay (fresh / stale / superseded / intent-drifted **renders on screen cards / service cards / atom chips per CHIP-03**, precedence red > orange > amber > gray, ≥50fps on a chain with 1 iframe + 6–8 service cards); chat archaeology (`[source]` click on substrate node opens verbatim quote within ≤5s; **citation click in Beat 3 sidebar additionally halos the corresponding service card / chip**) (Phase 13)
+- [x] **SUB-08**: Substrate UI surface — Cmd+P by intent (semantic match across all substrate node types **including flows**, ≥80% top-1 precision on 10 ambient queries; selecting a flow lands at L2 view per CHAIN-01, selecting an atom lands at L3 view with its chip auto-focused per CHIP-01/02); canvas substrate-state overlay (fresh / stale / superseded / intent-drifted **renders on screen cards / service cards / atom chips per CHIP-03**, precedence red > orange > amber > gray, ≥50fps on a chain with 1 iframe + 6–8 service cards); chat archaeology (`[source]` click on substrate node opens verbatim quote within ≤5s; **citation click in Beat 3 sidebar additionally halos the corresponding service card / chip**) (Phase 13)
 - [ ] **SUB-09**: PR-review intent-drift mode — paste raw unified diff, **canvas colors affected screen cards / service cards / atom chips** (intent-drifted highlighted distinctly); explanation sidebar reads in ≤30s on camera; **mocked Sync affordance triggers blast-radius animation against pre-loaded substrate state — trigger card pulses, service cards pulse in invocation order down the chain** (real multi-machine sync deferred to v3) (Phase 13)
 - [x] **SUB-10**: Constraint-injection demo beat measures Contract IDE vs bare Claude on the locked Beat 2 prompt — Contract IDE retrieves all 5 substrate rules, writes a 5-file change first try; bare Claude defaults to `db.user.delete()` and 0/5 rules; receipt comparison shows favorable token + tool-call delta in stacked-absolute format (`Contract IDE: ~N tokens · ~N tool calls · 5/5 rules`) (Phase 11 demo-required slice)
 
@@ -258,7 +258,7 @@ Explicitly excluded. Documented to prevent scope creep.
 | CARD-03 | Phase 13 | Pending |
 | CHIP-01 | Phase 13 | Pending |
 | CHIP-02 | Phase 13 | Pending |
-| CHIP-03 | Phase 13 | Pending |
+| CHIP-03 | Phase 13 | Complete |
 | CHAIN-01 | Phase 13 | Pending |
 | CHAIN-02 | Phase 13 | Pending |
 | SIDEBAR-01 | Phase 13 | Pending |
@@ -269,7 +269,7 @@ Explicitly excluded. Documented to prevent scope creep.
 | SUB-05 | Phase 11 | Complete |
 | SUB-06 | Phase 12 | Complete |
 | SUB-07 | Phase 12 | Complete |
-| SUB-08 | Phase 13 | Pending |
+| SUB-08 | Phase 13 | Complete |
 | SUB-09 | Phase 13 | Pending |
 | SUB-10 | Phase 11 | Complete |
 

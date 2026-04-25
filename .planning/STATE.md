@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-04-24)
 
 **Core value:** A developer or PM can locate any piece of the product by intent, edit its contract, and have the agent produce the corresponding code change — without touching the file tree.
-**Current focus:** Phase 12 Plan 03 complete (2026-04-25). Intent-level supersession engine landed (THE MOAT — SUB-07): walk_rollup_descendants reverse-BFS through Phase 8's nodes.parent_uuid + rollup_inputs JSON DAG (depth ≤ 5) + substrate-anchor join via derived-from-contract edges; record_priority_shift_internal (REJECTs overlapping unapplied shifts per RESEARCH.md Q2); preview_intent_drift_impact DRY-RUN safeguard (sample of 10); propagate_intent_drift chunks-of-10 cascade with three-way verdict persistence + confidence-tiered state update (≥0.85 auto-apply / 0.50–0.85 surface / <0.50 noise floor). 3 Tauri IPC commands (record_priority_shift, preview_intent_drift_impact_cmd, propagate_intent_drift_cmd) registered in lib.rs alongside 12-02's 3 fact-engine commands (6 supersession commands total). Per-decision DriftLocks held one at a time (no cross-pair locking — eliminates intent_engine deadlock concern). Commits 4ff7005, 7917561. 98/98 lib tests pass; clippy clean. SUB-07 (the moat) closed. 12-04 (adversarial harness) is the only remaining Phase 12 plan.
+**Current focus:** Phase 13 Plan 01 complete (2026-04-25). Foundational substrate-state plumbing landed (SUB-08 + CHIP-03): useSubstrateStore extended additively with nodeStates Map<uuid, SubstrateNodeState> alongside Phase 11's footer counter slice; useGraphStore extended with focusedAtomUuid slice; two new Tauri commands (get_substrate_states_for_canvas, get_substrate_node_detail) reading the actual substrate_nodes schema with defensive table + intent_drift_state column existence checks; CVA intent_drifted (orange-600 + 8px glow + pulse) and superseded (orange-400 + opacity 0.75, no pulse) variants; resolveNodeState compositor with explicit precedence (drifted > intent_drifted > rollup_stale > superseded > rollup_untracked > healthy) exported as load-bearing import for Wave 2 plans; GraphCanvasInner.buildFlowNodes rewired through resolveNodeState; AppShell hydrates substrate state on mount. 6 unit tests + full lib suite (104/104) pass. Commits 2ca959d, 7e8c471. Wave 2 (13-02/03/04/05) unblocked.
 
 ## Current Position
 
-Phase: 12 of 13 (Conflict / Supersession Engine) — IN PROGRESS
-Plan: 3 of 4 complete in current phase
-Status: Phase 12 Plan 03 COMPLETE (2026-04-25). Intent-level supersession engine (the moat) landed: walker.rs (walk_rollup_descendants reverse-BFS, depth ≤ 5, parent_uuid + rollup_inputs JSON LIKE scan + substrate-anchor join via derived-from-contract edges, current-truth filter) + intent_engine.rs (record_priority_shift_internal with REJECT-overlapping-shifts per RESEARCH.md Q2; preview_intent_drift_impact DRY-RUN safeguard sampling 10 descendants; propagate_intent_drift chunks-of-10 cascade with confidence-tiered persistence — ≥0.85 auto-apply / 0.50–0.85 surface / <0.50 filtered). 3 new Tauri IPC commands registered alongside 12-02's 3 fact-engine commands (6 supersession commands total). Per-decision DriftLocks (one lock at a time — no deadlock pair). substrate:intent_drift_changed event payload established for Phase 13. Commits 4ff7005, 7917561. 98/98 lib tests pass; clippy clean. SUB-07 closed.
-Last activity: 2026-04-25 — Phase 12 Wave 2 complete: 12-02 fact engine + 12-03 intent engine both shipped. 12-04 adversarial harness is the final Phase 12 plan.
+Phase: 13 of 13 (Substrate UI + Demo Polish) — IN PROGRESS
+Plan: 1 of 12 complete in current phase
+Status: Phase 13 Plan 01 COMPLETE (2026-04-25). Foundational substrate-state plumbing landed (SUB-08 + CHIP-03). useSubstrateStore extended additively (Phase 11 footer counter slice preserved + Phase 13 nodeStates Map slice added). focusedAtomUuid slice on graphStore (canonical setter API: selectNode, NOT setSelectedNode). get_substrate_states_for_canvas + get_substrate_node_detail Rust commands with defensive PRAGMA table_info column check. CVA intent_drifted + superseded variants. resolveNodeState exported (load-bearing for 13-04/05/06/07/09). 6 substrate-module unit tests + 104/104 full lib tests; clippy clean. Commits 2ca959d, 7e8c471.
+Last activity: 2026-04-25 — Phase 13 Wave 1 complete: 13-01 plumbing landed. Wave 2 (plans 13-02, 13-03, 13-04, 13-05) all unblocked — they import resolveNodeState + useSubstrateStore.nodeStates + focusedAtomUuid.
 
-Progress: [██████████] 93% (7/13 phases complete + Phase 10 4/4 + Phase 11 Wave 2 complete + Phase 12 3/4 — Phases 1, 2, 3, 5, 6, 7, 10 complete; Phase 4 partially landed; Phase 8 implementation done pending UAT; Phase 9 code-shipped 8/8 plans; Phase 11 Plans 01–04 complete (11-05 outstanding); Phase 12 Plans 01–03 complete; UAT execution (09-UAT.md) is the Phase 9 closure gate)
+Progress: [██████████] 95% (7/13 phases complete + Phase 10 4/4 + Phase 11 Wave 2 complete + Phase 12 3/4 + Phase 13 1/12 — Phases 1, 2, 3, 5, 6, 7, 10 complete; Phase 4 partially landed; Phase 8 implementation done pending UAT; Phase 9 code-shipped 8/8 plans; Phase 11 Plans 01–04 complete; Phase 12 Plans 01–03 complete; Phase 13 Plan 01 complete; UAT execution (09-UAT.md) is the Phase 9 closure gate)
 
 ## Performance Metrics
 
@@ -77,6 +77,7 @@ Progress: [██████████] 93% (7/13 phases complete + Phase 10 
 | Phase 12-conflict-supersession-engine P02 | 7min | 2 tasks | 9 files |
 | Phase 11-distiller-constraint-store-contract-anchored-retrieval P05 | 5 | 2 tasks | 9 files |
 | Phase 12-conflict-supersession-engine P03 | 8min | 2 tasks | 5 files |
+| Phase 13 P01 | 8 min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -298,6 +299,10 @@ Recent decisions affecting current work:
 - [Phase 12-conflict-supersession-engine]: Plan 12-03: uuid crate features in Cargo.toml unchanged — Phase 7 already shipped uuid = { version = "1", features = ["v4"] }. Plan suggested adding "serde" feature; not needed (intent_engine never serializes Uuid directly, only .to_string() at DB boundary). Avoided unnecessary feature bloat.
 - [Phase 12-conflict-supersession-engine]: Plan 12-03: Smoke verification via SQL-level test (sqlite3 INSERT + SELECT WHERE applied_at IS NULL) instead of full app launch — gave deterministic guarantee that priority_shifts schema accepts our write shape AND that the RESEARCH.md Q2 reject path triggers correctly. Full IPC smoke deferred to 12-04.
 - [Phase 12-conflict-supersession-engine]: Plan 12-03: run_claude_judge duplicated (~10 lines) from fact_engine instead of imported — keeps the two engines decoupled per plan guidance; if claude -p invocation patterns diverge later (timeout, args), each engine evolves independently.
+- [Phase 13]: useSubstrateStore extended additively (Phase 11 footer counter slice + Phase 13 nodeStates Map slice coexist)
+- [Phase 13]: resolveNodeState exported from contractNodeStyles.ts as load-bearing import for Wave 2 plans 13-04/05/06/07/09 — single precedence definition site (drifted > intent_drifted > rollup_stale > superseded > rollup_untracked > healthy)
+- [Phase 13]: Defensive PRAGMA table_info column check in get_substrate_states_for_canvas — app boots even when Phase 12 v7 migration hasn't run; falls back to invalid_at-only state derivation
+- [Phase 13]: focusedAtomUuid slice on graphStore (NOT substrateStore) — UI-interaction marker, not substrate semantic. Canonical setter API: useGraphStore.getState().selectNode(uuid) NOT setSelectedNode
 
 ### Pending Todos
 
