@@ -177,3 +177,28 @@ Files exist:
 Commits exist: bb1258c, 1d00293, a86c540 ✓
 
 Build status: cargo build + clippy -D warnings + cargo test ✓ | npm run build (tsc + vite) ✓
+
+## UAT Findings & Fixes (post-checkpoint)
+
+The Beat 1 visual sign-off surfaced six issues across the dependent code paths.
+All resolved before checkpoint approval; the planning pass now shows real
+substrate knowledge end-to-end.
+
+| # | Symptom | Root cause | Fix | Commit |
+|---|---|---|---|---|
+| 1 | Delegate click did nothing | `fts5: syntax error near "#"` — contract body's markdown headers passed verbatim to FTS5 MATCH | Sanitize query: tokenize, strip non-alphanumeric, phrase-quote, OR-join, cap 32 tokens | `c055af6` |
+| 2 | `claude exit non-zero: Warning: no stdin data received in 3s` | `tauri-plugin-shell` always pipes stdin without writing/closing; newer claude CLI exits non-zero | Switch to `std::process::Command` via `tokio::task::spawn_blocking`; pipe prompt to stdin and drop to signal EOF | `1a62f63` |
+| 3 | `claude exit non-zero:` (empty stderr) | claude `-p --output-format json` returns errors in stdout body, not stderr | Surface exit code + stderr + first 500 chars of stdout in error; detect `is_error: true` and surface `result` field | `9d63b1e` |
+| 4 | "Not logged in · Please run /login" | `--bare` deliberately ignores OAuth keychain; requires `ANTHROPIC_API_KEY` | Drop `--bare` from all 4 claude call-sites (plan_review, rerank, distiller pipeline, delegate_execute). Trade-off: lose 1-3s startup discipline (Pitfall 3) for working Claude Code OAuth auth | `daa5b6d` |
+| 5 | 77 episodes ingested, 0 substrate produced | `INSERT OR IGNORE` short-circuits `episode:ingested` event on re-backfill; existing episodes never re-trigger distillation after pipeline fixes land | New `redistill_all_episodes` Tauri command + UI affordance in BackfillModal with live progress | `bad3047` |
+| 6 | All 137 distilled nodes shipped with `anchored_uuids='[]'` (cousin-exclusion JOIN broken) | `load_session_atom_candidates` filtered by `nodes.updated_at >= sessions.started_at` — undefined string compare (timezone format mismatch), and structurally always-empty (atoms derived during repo scan, before runtime sessions) | Drop session-time filter; return 50 most-recently-updated canonical atoms as broad fallback (matches the pipeline-level comment's stated intent) | `f099a67` |
+
+### Coordination notes for downstream phases
+
+- Plan 11-05 UAT: substrate IS now seeded (137 nodes after second redistill); SC 1 (≥5 nodes per session with provenance) gateable.
+- Phase 12 supersession: `--bare` was dropped here; if Phase 12 introduces additional claude calls, follow the same OAuth pattern (no env-var dependency) for Claude Code-only auth.
+- Plan 11-04 also added `redistill:progress` event + IPC wrappers; Plan 11-05 substrate side panel can reuse the substrate-count refresh pattern.
+
+### Sonnet+medium effort uplift (post-checkpoint refinement)
+
+`run_agent` signature extended with explicit `model` + `effort` params. `delegate_execute` now passes `Some("sonnet"), Some("medium")` rather than inheriting the chat panel's haiku/low defaults — delegate writes code with multi-file edits + decisions.json emission, which sonnet+medium handles reliably.
