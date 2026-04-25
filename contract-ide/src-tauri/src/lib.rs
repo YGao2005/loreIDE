@@ -11,6 +11,7 @@ pub mod drift;
 pub mod retrieval;
 pub mod session;
 pub mod sidecar;
+pub mod supersession;
 
 use tauri::Manager;
 use tauri_plugin_sql::Builder as SqlBuilder;

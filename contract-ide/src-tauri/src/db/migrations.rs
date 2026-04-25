@@ -366,5 +366,81 @@ CREATE TABLE IF NOT EXISTS distiller_dead_letters (
 CREATE INDEX IF NOT EXISTS idx_dead_letters_episode ON distiller_dead_letters(episode_id);
 "#,
         kind: MigrationKind::Up,
+    },
+    // WARNING: v7 is immutable once shipped. Do NOT modify sql or description.
+    // Phase 12 Plan 12-01 — supersession_layer: ALTER substrate_nodes for intent
+    // drift state, plus priority_shifts + intent_drift_verdicts tables.
+    //
+    // Phase 11 (v6) already shipped substrate_nodes, substrate_edges, and the
+    // partial active index. v7 layers Phase 12's additions on top:
+    //   - intent_drift_* columns on substrate_nodes via ALTER TABLE ADD COLUMN
+    //   - priority_shifts (new table) — log of L0 priority-shift events
+    //   - intent_drift_verdicts (new table) — full audit trail of drift judgments
+    //   - idx_substrate_edges_type — Phase 12 supersession edge lookups
+    //
+    // See .planning/phases/12-conflict-supersession-engine/12-RESEARCH.md
+    // for the schema rationale (Pattern 1) and Pitfall 8 for the coordination
+    // strategy with Phase 11.
+    Migration {
+        version: 7,
+        description: "phase12_supersession_layer",
+        sql: r#"
+-- Phase 12: Supersession schema layer.
+-- Phase 11 (v6) shipped substrate_nodes + substrate_edges + the active partial
+-- index + the valid_at index + invalidated_by self-FK already; this migration
+-- only ADDS what Phase 11 did not provide.
+
+-- 1. Intent-drift state columns on substrate_nodes — only added if not present
+--    (SQLite ALTER TABLE has no IF NOT EXISTS for columns, but Phase 11 v6
+--    explicitly does NOT include these columns — verified against migrations.rs
+--    v6 schema. If Phase 11 ever adds them, drop this migration entirely).
+ALTER TABLE substrate_nodes ADD COLUMN intent_drift_state TEXT;
+ALTER TABLE substrate_nodes ADD COLUMN intent_drift_confidence REAL;
+ALTER TABLE substrate_nodes ADD COLUMN intent_drift_reasoning TEXT;
+ALTER TABLE substrate_nodes ADD COLUMN intent_drift_judged_at TEXT;
+ALTER TABLE substrate_nodes ADD COLUMN intent_drift_judged_against TEXT;
+
+-- 2. Edge-type lookup index — used by find_substrate_history's UNION query
+--    (12-04) to filter for 'supersedes' edges quickly. Phase 11 has source/target
+--    indexes but not a (type, source, target) composite. This is additive.
+CREATE INDEX IF NOT EXISTS idx_substrate_edges_type_lookup
+    ON substrate_edges(edge_type, source_uuid, target_uuid);
+
+-- 3. Priority shift log — owned by Phase 12 (NEW table).
+--    Each row records an L0 contract priority-shift event, the seed for the
+--    intent-drift cascade in 12-03. summary_of_old/new are LLM-generated
+--    one-line summaries used in the judge prompt.
+CREATE TABLE IF NOT EXISTS priority_shifts (
+    id              TEXT PRIMARY KEY,
+    old_l0_uuid     TEXT NOT NULL,
+    new_l0_uuid     TEXT NOT NULL,
+    valid_at        TEXT NOT NULL,
+    summary_of_old  TEXT NOT NULL,
+    summary_of_new  TEXT NOT NULL,
+    applied_at      TEXT,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- 4. Intent-drift verdict audit log — owned by Phase 12 (NEW table).
+--    substrate_nodes.intent_drift_state holds the LATEST verdict (UPSERT pattern);
+--    this table is the FULL HISTORY for cost-cache + audit + adversarial harness
+--    replay. CHECK constraints prevent malformed writes from 12-03 / 12-04.
+CREATE TABLE IF NOT EXISTS intent_drift_verdicts (
+    id                TEXT PRIMARY KEY,
+    node_uuid         TEXT NOT NULL,
+    priority_shift_id TEXT NOT NULL,
+    verdict           TEXT NOT NULL CHECK(verdict IN ('DRIFTED', 'NOT_DRIFTED', 'NEEDS_HUMAN_REVIEW')),
+    confidence        REAL NOT NULL CHECK(confidence >= 0.0 AND confidence <= 1.0),
+    reasoning         TEXT,
+    judged_at         TEXT NOT NULL,
+    auto_applied      INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_intent_drift_verdicts_node
+    ON intent_drift_verdicts(node_uuid);
+CREATE INDEX IF NOT EXISTS idx_intent_drift_verdicts_shift
+    ON intent_drift_verdicts(priority_shift_id);
+"#,
+        kind: MigrationKind::Up,
     }]
 }
