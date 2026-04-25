@@ -17,6 +17,7 @@
  */
 
 import { getDb } from '../db';
+import { buildFtsQuery } from '../lib/fts_query';
 import { reRankWithSectionWeight, type FtsResultLike } from '../lib/section_weight';
 import path from 'node:path';
 
@@ -35,6 +36,9 @@ export async function findByIntentMass(query: string, limit = 100) {
   const db = getDb();
   // Joining nodes for body + human_pinned. contract_body is the column
   // indexed in nodes_fts (verified in find_by_intent.ts migrations).
+  // OR-tokenize the natural-language query so FTS5 doesn't AND every term
+  // (mirrors the Rust IPC fix in commands/mass_edit.rs::build_fts_query).
+  const ftsMatch = buildFtsQuery(query);
   const rows = db
     .prepare(
       `
@@ -49,7 +53,7 @@ export async function findByIntentMass(query: string, limit = 100) {
       LIMIT ?
       `,
     )
-    .all(query, limit) as FtsResultLike[];
+    .all(ftsMatch, limit) as FtsResultLike[];
 
   if (rows.length === 0) {
     return {

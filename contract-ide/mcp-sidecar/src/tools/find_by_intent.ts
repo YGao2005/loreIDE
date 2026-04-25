@@ -8,6 +8,7 @@
  */
 
 import { getDb } from '../db';
+import { buildFtsQuery } from '../lib/fts_query';
 import { annotateStaleness, type StalenessSummary } from '../lib/staleness_annotation';
 
 /**
@@ -27,6 +28,9 @@ export async function findByIntent(query: string, limit: number) {
   // come from Plan 01-02 migration v1; if the FTS column layout differs from
   // this query, the handler will throw and we'll swap based on the observed
   // PRAGMA table_info(nodes_fts) output logged in SUMMARY.
+  // OR-tokenize the natural-language query so FTS5 doesn't AND every term.
+  // Mirrors the helper in find_by_intent_mass.ts and the Rust IPC.
+  const ftsMatch = buildFtsQuery(query);
   const rows = db
     .prepare(
       `
@@ -39,7 +43,7 @@ export async function findByIntent(query: string, limit: number) {
       LIMIT ?
       `,
     )
-    .all(query, limit) as Array<{
+    .all(ftsMatch, limit) as Array<{
       uuid: string;
       name: string;
       level: string;
