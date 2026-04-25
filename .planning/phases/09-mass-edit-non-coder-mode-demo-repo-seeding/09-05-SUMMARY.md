@@ -150,10 +150,73 @@ Claude Code on macOS encodes cwd → project dir by replacing `/` with `-`:
 
 `claude --version` returns: `2.1.119 (Claude Code)`. Both baselines record this in `claude_version`.
 
+## Post-execution audit (2026-04-25)
+
+Audit of the recorded JSONLs surfaced two issues that required corrections;
+both shipped before this plan was closed:
+
+**1. Bare-Claude baseline contamination (Pitfall 6 escape).** The original
+`record-baseline.sh` removed `.contracts/` from the working tree but the
+canonical demo repo's git history still contained it at the locked SHA. In
+the workspace-delete recording, bare Claude ran:
+
+```bash
+git log --all --oneline -- '.contracts/ambient/api-workspace-delete*'
+git show 95c1c20 -- '.contracts/ambient/api-workspace-delete-001.md'
+```
+
+…and read the substrate contract from history including text like
+"Sets Workspace.deletedAt (soft-delete per dec-soft-delete-30day-grace)".
+
+**Fix:** `record-baseline.sh` now builds a HISTORY-CLEAN tmpdir workspace via
+rsync + fresh `git init` + single synthetic commit. Bare Claude's `git show` /
+`git log` only sees the baseline commit; substrate is unreachable in any past
+commit. Asserts `.contracts/` not in any committed tree before running claude.
+
+**2. Rule-honoring score audit.** Pre-audit baselines had no
+rule-by-rule scoring — the "5/5 vs 0/5" demo claim was unverified. Audit
+of the actual Edit/Write payloads against the 5 substrate rules showed:
+
+- `delete-account` (history-clean): **1/5** — rule 5 (`dec-confirm-via-email-link`)
+  accidentally honored because bare Claude picked `confirmation="email-link"`
+  from a 2-option TypeScript enum (`'email-link' | 'modal'`) it saw in
+  `DangerActionButton.tsx`. No team-rule reasoning.
+- `workspace-delete` (history-clean): **0/5** — bare Claude chose
+  `confirmation="modal"` for the same enum on a structurally identical task.
+
+`baselines/README.md` carries the full audit table.
+
+### Final metrics (history-clean, 2026-04-25 re-recordings)
+
+| Field | delete-account | workspace-delete |
+|-------|----------------|------------------|
+| `input_tokens` | 28 | 30 |
+| `cache_read_input_tokens` | 661,468 | 742,513 |
+| `output_tokens` | 10,201 | 14,408 |
+| `tool_calls` | 10 | 15 |
+| `wall_time` | 83s | 122s |
+| `rules_honored` | 1/5 (accidental) | 0/5 |
+
+**presentation-script.md updated to match:** Beat 2 banner now reads
+"Bare Claude: 10 tool calls · 661k context read · 1/5 rules honored*" with
+the enum-sampling footnote; Beat 4 inset reads "15 tool calls · 743k context
+read · 0/5 rules honored". The original "1,400 vs 7,200 tokens" framing is
+replaced with `tool_calls + cache_read` (the honest measurable delta).
+
+### JSONL encoding (corrected)
+
+Original SUMMARY claimed the encoding was `sed 's/\//-/g'`. Actually Claude
+Code replaces ALL non-alphanumeric chars (`/`, `_`, `.`) with `-` and resolves
+macOS `/var/folders/...` to `/private/var/folders/...` before encoding. The
+fixed `record-baseline.sh` searches for the JSONL by `cwd` field rather than
+predicting the encoded path.
+
 ## Commits
 
 - `7005fb5` — chore(09-05): add substrate seed + reset script per DEMO-02
 - `13e6270` — docs(09-05): record bare-Claude baselines per DEMO-03
+- `b9c7895` — docs(09-05): complete plan — SUMMARY.md + STATE.md + ROADMAP.md
+- `ad45462` — fix(09-05): history-clean bare-Claude baselines + rule audit
 
 ## Deviations from Plan
 
