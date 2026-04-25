@@ -115,3 +115,103 @@ pub async fn propagate_intent_drift_cmd(
     let pool = pool_clone(&app).await?;
     propagate_intent_drift(&app, &pool, &priority_shift_id).await
 }
+
+// ----------- 12-04 Beat 3 demo backstop -----------
+
+/// Beat 3 demo backstop — sets `substrate_nodes.intent_drift_state` directly
+/// for a hardcoded uuid (typically `con-settings-no-modal-interrupts-2025-Q4`
+/// per scenario-criteria.md § 8). Per RESEARCH.md Pattern 6: dual-path coverage
+/// for record day — engine path is preferred, this is the demo insurance when
+/// `claude -p` is rate-limited or variance-flaked.
+///
+/// Two safety gates:
+///   1. **Compile-time:** `#[cfg(feature = "demo-fixture")]` on the real impl.
+///      Default builds compile a stub that returns an error. Production binaries
+///      cannot reach the implementation regardless of frontend code paths.
+///   2. **Runtime:** Active repo path must contain `"contract-ide-demo"`. Even
+///      a feature-enabled build refuses to mutate state in non-demo repos.
+///
+/// USAGE: in the demo runbook, `cargo build --features demo-fixture` (or
+/// `tauri build --features demo-fixture`) produces the demo binary; the
+/// frontend's Beat 3 verifier panel calls this if the engine path emits no
+/// `substrate:intent_drift_changed` event within ~3 seconds (timeout fallback).
+#[cfg(feature = "demo-fixture")]
+#[tauri::command]
+pub async fn demo_force_intent_drift(
+    app: tauri::AppHandle,
+    node_uuid: String,
+    confidence: f64,
+    reasoning: String,
+) -> Result<(), String> {
+    use tauri::Emitter;
+
+    // Runtime gate: only proceed if the active repo path contains
+    // "contract-ide-demo" (per scenario-criteria.md § 9).
+    // RepoState is `Mutex<Option<PathBuf>>` — convert to string for the check.
+    let repo_state = app.state::<crate::commands::repo::RepoState>();
+    let repo_path = {
+        let guard = repo_state
+            .0
+            .lock()
+            .map_err(|e| format!("repo state lock poisoned: {e}"))?;
+        guard.clone()
+    };
+    let repo_path_str = repo_path
+        .as_ref()
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    if !repo_path_str.contains("contract-ide-demo") {
+        return Err(format!(
+            "demo_force_intent_drift refused: active repo path {repo_path_str:?} does \
+             not contain 'contract-ide-demo'"
+        ));
+    }
+
+    let pool = pool_clone(&app).await?;
+    let now = chrono::Utc::now().to_rfc3339();
+    sqlx::query(
+        "UPDATE substrate_nodes \
+         SET intent_drift_state = 'drifted', \
+             intent_drift_confidence = ?1, \
+             intent_drift_reasoning = ?2, \
+             intent_drift_judged_at = ?3, \
+             intent_drift_judged_against = NULL \
+         WHERE uuid = ?4",
+    )
+    .bind(confidence)
+    .bind(&reasoning)
+    .bind(&now)
+    .bind(&node_uuid)
+    .execute(&pool)
+    .await
+    .map_err(|e| format!("demo_force_intent_drift sql update: {e}"))?;
+
+    // Emit the same event shape as the engine path so Phase 13 UI is identical
+    // regardless of whether the engine or the backstop fired.
+    let _ = app.emit(
+        "substrate:intent_drift_changed",
+        serde_json::json!({
+            "uuid": node_uuid,
+            "verdict": "DRIFTED",
+            "confidence": confidence,
+            "auto_applied": false,
+            "priority_shift_id": null,
+            "demo_backstop": true,
+        }),
+    );
+    Ok(())
+}
+
+/// Stub when the `demo-fixture` feature is OFF — production builds compile this
+/// arm. Returns an error if invoked from the frontend; the frontend should detect
+/// and fall through to the engine path (or surface "demo backstop not built").
+#[cfg(not(feature = "demo-fixture"))]
+#[tauri::command]
+pub async fn demo_force_intent_drift(
+    _app: tauri::AppHandle,
+    _node_uuid: String,
+    _confidence: f64,
+    _reasoning: String,
+) -> Result<(), String> {
+    Err("demo_force_intent_drift: built without the `demo-fixture` cargo feature".to_string())
+}

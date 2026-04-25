@@ -92,6 +92,11 @@ pub fn run() {
             commands::supersession::record_priority_shift,
             commands::supersession::preview_intent_drift_impact_cmd,
             commands::supersession::propagate_intent_drift_cmd,
+            // 12-04 Beat 3 demo backstop. The function body is gated by the
+            // `demo-fixture` cargo feature — default builds compile a stub
+            // that returns an error if invoked. Registered unconditionally
+            // so JS callers always have a stable command name.
+            commands::supersession::demo_force_intent_drift,
         ])
         .setup(|app| {
             let window = app
