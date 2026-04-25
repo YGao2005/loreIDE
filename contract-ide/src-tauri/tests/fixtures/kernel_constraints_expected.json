@@ -1,0 +1,86 @@
+[
+  {
+    "type": "constraint",
+    "text": "Rust Tauri commands that accept a file path from JS must canonicalize it and assert the target sits under the current RepoState root.",
+    "applies_when": "when writing a Rust Tauri command that takes a path argument from the JS side",
+    "confidence": "explicit"
+  },
+  {
+    "type": "constraint",
+    "text": "In Tailwind v4 CSS files, local @import directives must come before @import \"tailwindcss\".",
+    "applies_when": "when adding or editing any CSS file in this project (Tailwind v4 is the styling system)",
+    "confidence": "explicit"
+  },
+  {
+    "type": "constraint",
+    "text": "Monaco setHiddenAreas and decoration setup must run in a useEffect keyed on [monaco, content], never in onMount — useMonaco() can be null on first render during fast tab switches.",
+    "applies_when": "when integrating or modifying a Monaco editor component (hidden areas, decorations, range scoping)",
+    "confidence": "explicit"
+  },
+  {
+    "type": "constraint",
+    "text": "saveContract (and any caller of write_contract) must first read the existing sidecar and preserve neighbors, format_version, and derived_at on merge — write_contract is an OVERWRITE and silently wipes graph edges otherwise.",
+    "applies_when": "when writing code that persists a contract sidecar, saves an inspector edit, or calls write_contract / upsert_node_pub",
+    "confidence": "explicit"
+  },
+  {
+    "type": "constraint",
+    "text": "Use a plain button tab strip for tabbed UIs — do not use shadcn-Tabs.",
+    "applies_when": "when building any tab-style UI component (switcher, panel tabs, inspector tabs)",
+    "confidence": "explicit"
+  },
+  {
+    "type": "constraint",
+    "text": "React click callbacks that reference mutable arrays or state must read .current from a ref inside the handler, not close over mount-time values — otherwise expand/collapse handles fire against stale closures.",
+    "applies_when": "when writing a React click/event handler that interacts with a mutable array or list state (add/remove/expand)",
+    "confidence": "explicit"
+  },
+  {
+    "type": "constraint",
+    "text": "When spawning $EDITOR to open a file at a line, use a lookup table per editor: VS Code family --goto path:line; subl/zed/mate/atom path:line; vim/nvim/mvim/gvim/nvr +line path; emacs +line path; helix path:line; unknown → fall through to open.",
+    "applies_when": "when writing code that opens a file at a specific line in the user's preferred editor",
+    "confidence": "explicit"
+  },
+  {
+    "type": "constraint",
+    "text": "When binding foreign-key columns from JS/TS to SQLite via Rust, coerce empty strings to NULL — SQLite checks REFERENCES nodes(uuid) against '' and fails with FK constraint error (code 787).",
+    "applies_when": "when writing code that inserts rows with foreign-key columns populated from nullable upstream fields (parent_uuid, canonical_uuid, route, etc.)",
+    "confidence": "inferred"
+  },
+  {
+    "type": "constraint",
+    "text": "React useEffect that depends on a store-derived object (from .find(), .filter(), etc.) refires on every store update because .find() returns a new reference — depend on the stable key (UUID) instead, or guard the effect body with a key-equality check.",
+    "applies_when": "when writing a React useEffect whose dependency is an object pulled out of a store collection",
+    "confidence": "inferred"
+  },
+  {
+    "type": "constraint",
+    "text": "Tauri Rust state stored in Mutex<Option<T>> is in-memory only and resets to None on full process restart — don't rely on it alone for anything that must survive restart. Pair it with a durable source (localStorage, SQLite, or a config file) and rehydrate on boot.",
+    "applies_when": "when storing user-session state or workspace config (open repo, auth token, last-selected item) that should persist across app restarts",
+    "confidence": "inferred"
+  },
+  {
+    "type": "constraint",
+    "text": "Tauri TS changes hot-reload instantly; Rust changes (new commands, signature changes, FK binding logic, handler registration) require Ctrl+C and npm run tauri dev restart. When shipping a cross-boundary fix, explicitly tell the user which side needs a restart.",
+    "applies_when": "when shipping a fix or feature that touches both TS and Rust in a Tauri project",
+    "confidence": "inferred"
+  },
+  {
+    "type": "constraint",
+    "text": "When the Inspector Code tab fails with ENOENT on fs::canonicalize(repo_path.join(rel_path)), the primary suspect is a repo/contract mismatch (contract was seeded in repo A but repo B is loaded) — not a missing file. Always verify getRepoPath() + contract provenance before touching the resolve logic.",
+    "applies_when": "when the Code tab or any repo-relative file resolver throws ENOENT on a path that should exist",
+    "confidence": "inferred"
+  },
+  {
+    "type": "constraint",
+    "text": "User-visible actions (button clicks, command triggers) must never reduce to a silent console.log. Emit inline feedback (toast, amber hint, status line) even when the underlying feature is stubbed — otherwise the user can't distinguish 'clicked and nothing happened' from 'clicked and it silently worked'.",
+    "applies_when": "when stubbing, mocking, or placeholder-implementing a user-triggered action",
+    "confidence": "inferred"
+  },
+  {
+    "type": "constraint",
+    "text": "When an agent needs to debug a running Tauri/desktop app without direct UI access, wire a devlog Rust command + installDevLog() TS shim that mirrors console.* to /tmp/<app>.log — the agent can then tail the file directly instead of asking the user to copy-paste console output repeatedly.",
+    "applies_when": "when an agent needs observability into a running desktop app (Tauri, Electron) without clicking the UI itself, especially for multi-round debugging loops",
+    "confidence": "inferred"
+  }
+]

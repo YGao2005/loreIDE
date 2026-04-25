@@ -1,0 +1,91 @@
+{
+  "beat": "beat4",
+  "commit": {
+    "author": "claude (local agent run)",
+    "author_email": "agent@local",
+    "message": "Add Delete Workspace action to Team Settings",
+    "sha": "7c1d8b4",
+    "files_changed": 5,
+    "timestamp": "2026-04-26T08:18:00Z"
+  },
+  "blast_radius": {
+    "trigger_uuid": "b0000000-0000-4000-8000-000000000000",
+    "participant_uuids": [
+      "b1000000-0000-4000-8000-000000000000",
+      "e4000000-0000-4000-8000-000000000000",
+      "ed000000-0000-4000-8000-000000000000",
+      "e7000000-0000-4000-8000-000000000000",
+      "e8000000-0000-4000-8000-000000000000",
+      "ec000000-0000-4000-8000-000000000000"
+    ]
+  },
+  "honors": [
+    {
+      "kind": "honor",
+      "ruleUuid": "dec-soft-delete-30day-grace-2026-02-18",
+      "ruleName": "soft-delete-30day-grace",
+      "detail": "workspace.deletedAt set; 30-day grace before nightly purge"
+    },
+    {
+      "kind": "honor",
+      "ruleUuid": "con-anonymize-not-delete-tax-held-2026-03-04",
+      "ruleName": "anonymize-tax-held",
+      "detail": "org-scoped invoices anonymized via updateMany on workspace purge"
+    },
+    {
+      "kind": "honor",
+      "ruleUuid": "con-stripe-customer-archive-2026-02-22",
+      "ruleName": "stripe-archive",
+      "detail": "stripe.customers.update on the workspace billing customer; subscriptions canceled first"
+    },
+    {
+      "kind": "honor",
+      "ruleUuid": "con-mailing-list-suppress-not-delete-2026-03-11",
+      "ruleName": "mailchimp-suppress",
+      "detail": "every workspace member's marketing record set to status=unsubscribed"
+    },
+    {
+      "kind": "honor",
+      "ruleUuid": "dec-confirm-via-email-link-2026-02-18",
+      "ruleName": "email-link-confirmation",
+      "detail": "sendDeletionConfirmationEmail call gates the workspace purge"
+    },
+    {
+      "kind": "honor",
+      "ruleUuid": "con-design-system-destructive-ff0000-2026-04-25",
+      "ruleName": "destructive-ff0000",
+      "detail": "Delete Workspace button rendered with `bg-[#FF0000]` exactly — Tailwind variant substitution avoided"
+    }
+  ],
+  "implicit_decisions": [],
+  "harvested_rules": [
+    {
+      "uuid": "con-cascade-revoke-tokens-on-org-delete-2026-04-25",
+      "kind": "constraint",
+      "name": "Revoke member access tokens",
+      "text": "Revoke member access tokens immediately on workspace delete (don't wait for the 30-day grace).",
+      "promoted_from_implicit": false,
+      "attached_to_uuid": "ed000000-0000-4000-8000-000000000000",
+      "attached_to_name": "lib/begin-workspace-deletion"
+    },
+    {
+      "uuid": "dec-owner-orphan-check-2026-04-25",
+      "kind": "decision",
+      "name": "Owner-orphan check before delete",
+      "text": "Workspace delete requires solo-owner OR explicit ownership transfer to a remaining member.",
+      "promoted_from_implicit": false,
+      "attached_to_uuid": "e4000000-0000-4000-8000-000000000000",
+      "attached_to_name": "DELETE /api/workspace"
+    },
+    {
+      "uuid": "dec-confirmation-timeout-24h-2026-04-25",
+      "kind": "decision",
+      "name": "Confirmation link timeout 24h",
+      "text": "Email confirmation links for destructive actions expire in 24h — agent default yesterday morning, reviewer accepted, now a team rule.",
+      "promoted_from_implicit": true,
+      "attached_to_uuid": "ec000000-0000-4000-8000-000000000000",
+      "attached_to_name": "lib/send-deletion-confirmation-email"
+    }
+  ],
+  "flag": null
+}

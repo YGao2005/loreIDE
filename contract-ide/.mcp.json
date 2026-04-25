@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "contract-ide": {
+      "type": "stdio",
+      "command": "./src-tauri/binaries/mcp-server-aarch64-apple-darwin",
+      "args": [],
+      "env": {
+        "CONTRACT_IDE_DB_PATH": "/Users/yang/Library/Application Support/com.contract-ide.app/contract-ide.db",
+        "CONTRACT_IDE_REPO_PATH": "/Users/yang/lahacks/contract-ide"
+      }
+    }
+  }
+}

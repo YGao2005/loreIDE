@@ -1,0 +1,228 @@
+{
+  "beat": "beat3",
+  "commit": {
+    "author": "ji-eun",
+    "author_email": "ji-eun@startup.local",
+    "message": "Add Delete Account action to Settings danger zone",
+    "sha": "3a9f4e2",
+    "files_changed": 5,
+    "timestamp": "2026-04-25T09:42:00Z"
+  },
+  "blast_radius": {
+    "trigger_uuid": "a0000000-0000-4000-8000-000000000000",
+    "participant_uuids": [
+      "a1000000-0000-4000-8000-000000000000",
+      "e1000000-0000-4000-8000-000000000000",
+      "e2000000-0000-4000-8000-000000000000",
+      "e7000000-0000-4000-8000-000000000000",
+      "e8000000-0000-4000-8000-000000000000",
+      "ec000000-0000-4000-8000-000000000000"
+    ]
+  },
+  "honors": [
+    {
+      "kind": "honor",
+      "ruleName": "Matches contract",
+      "detail": "Delete Account action present in danger-zone section"
+    },
+    {
+      "kind": "honor",
+      "ruleUuid": "dec-soft-delete-30day-grace-2026-02-18",
+      "ruleName": "soft-delete-30day-grace",
+      "detail": "deletedAt set, no hard delete; nightly purge job picks up after 30-day window"
+    },
+    {
+      "kind": "honor",
+      "ruleUuid": "con-anonymize-not-delete-tax-held-2026-03-04",
+      "ruleName": "anonymize-tax-held",
+      "detail": "invoice updateMany overwrites user-identifying fields with [deleted user]"
+    },
+    {
+      "kind": "honor",
+      "ruleUuid": "con-stripe-customer-archive-2026-02-22",
+      "ruleName": "stripe-archive",
+      "detail": "stripe.customers.update called with metadata.archived=true; subscriptions canceled first"
+    },
+    {
+      "kind": "honor",
+      "ruleUuid": "con-mailing-list-suppress-not-delete-2026-03-11",
+      "ruleName": "mailchimp-suppress",
+      "detail": "marketing list member set to status=unsubscribed (not deleted)"
+    },
+    {
+      "kind": "honor",
+      "ruleUuid": "dec-confirm-via-email-link-2026-02-18",
+      "ruleName": "email-link-confirmation",
+      "detail": "sendDeletionConfirmationEmail call gates the irreversible step"
+    }
+  ],
+  "implicit_decisions": [
+    {
+      "id": "implicit-email-expiry-24h",
+      "field": "Email link expires in 24h",
+      "derivedFrom": "agent default — no team rule covered link lifetime",
+      "verify_response": {
+        "stream_delay_ms": 22,
+        "tokens": [
+          "Looked",
+          " at",
+          " ",
+          "`lib/account/beginAccountDeletion.ts:84`",
+          ".",
+          " ",
+          "The",
+          " confirmation",
+          " token",
+          " is",
+          " written",
+          " with",
+          " ",
+          "`expiresAt: addHours(now, 24)`",
+          ".",
+          "\n\n",
+          "There's",
+          " no",
+          " team",
+          " rule",
+          " on",
+          " link",
+          " lifetime",
+          " yet",
+          " —",
+          " I",
+          " picked",
+          " 24h",
+          " because",
+          " every",
+          " other",
+          " email-link",
+          " flow",
+          " in",
+          " the",
+          " repo",
+          " uses",
+          " 24h.",
+          " ",
+          "If",
+          " that's",
+          " wrong",
+          " for",
+          " destructive",
+          " actions,",
+          " narrow",
+          " the",
+          " constraint."
+        ]
+      }
+    },
+    {
+      "id": "implicit-audit-log-table",
+      "field": "Audit log written to `audit_log` table",
+      "derivedFrom": "inferred from project schema — `audit_log` exists, no other audit destination configured",
+      "verify_response": {
+        "stream_delay_ms": 22,
+        "tokens": [
+          "`lib/account/beginAccountDeletion.ts:112`",
+          " writes",
+          " a",
+          " row",
+          " to",
+          " ",
+          "`audit_log`",
+          " with",
+          " ",
+          "`action='account.delete.requested'`",
+          " and",
+          " the",
+          " request",
+          " IP.",
+          "\n\n",
+          "Schema",
+          " inspection",
+          " showed",
+          " no",
+          " separate",
+          " security/SIEM",
+          " sink.",
+          " ",
+          "If",
+          " compliance",
+          " needs",
+          " a",
+          " distinct",
+          " trail,",
+          " add",
+          " a",
+          " rule."
+        ]
+      }
+    },
+    {
+      "id": "implicit-cleanup-async",
+      "field": "Cleanup runs as background job",
+      "derivedFrom": "derived from contract.role \"primary action\" — request handler returns before purge",
+      "verify_response": {
+        "stream_delay_ms": 22,
+        "tokens": [
+          "The",
+          " request",
+          " handler",
+          " enqueues",
+          " ",
+          "`purgeAccount`",
+          " into",
+          " the",
+          " nightly",
+          " job",
+          " queue",
+          " and",
+          " returns",
+          " 202.",
+          "\n\n",
+          "Synchronous",
+          " purge",
+          " would",
+          " block",
+          " the",
+          " HTTP",
+          " thread",
+          " through",
+          " Stripe",
+          " +",
+          " Mailchimp",
+          " round-trips",
+          " (~3s",
+          " p95),",
+          " so",
+          " the",
+          " primary-action",
+          " contract",
+          " requires",
+          " async."
+        ]
+      }
+    }
+  ],
+  "harvested_rules": [
+    {
+      "uuid": "con-design-system-destructive-ff0000-2026-04-25",
+      "kind": "constraint",
+      "name": "Destructive primary actions use #FF0000",
+      "text": "Destructive primary actions on the Settings page use #FF0000 per the design system.",
+      "promoted_from_implicit": false,
+      "attached_to_uuid": "a1000000-0000-4000-8000-000000000000",
+      "attached_to_name": "Delete Account button"
+    }
+  ],
+  "flag": {
+    "kind": "flag",
+    "ruleUuid": "con-settings-no-modal-interrupts-2025-Q4",
+    "ruleName": "Parent surface holds con-settings-no-modal-interrupts-2025-Q4",
+    "detail": "(\"no modal interrupts on user actions\") — derived 2025-Q4 under priority `reduce-onboarding-friction`. Current priority since 2026-04-01 is `compliance-first`. The new modal interrupt may be intended; review.",
+    "parentSurfaceUuid": "a0000000-0000-4000-8000-000000000000",
+    "priority_history": [
+      { "priority": "reduce-onboarding-friction", "from": "2025-Q4", "to": "2026-03-31" },
+      { "priority": "compliance-first", "from": "2026-04-01", "to": null }
+    ]
+  }
+}

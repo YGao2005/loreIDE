@@ -1,0 +1,23 @@
+{
+  "atom_uuid": "TeamSettings.DangerZone",
+  "decisions": [
+    {
+      "key": "email_link_expiry_hours",
+      "chosen_value": "24",
+      "rationale": "Promoted from morning's Account-Settings default after reviewer accepted; now a team rule (Beat 4 narrative — promotion mechanism).",
+      "substrate_citation_id": "dec-confirmation-timeout-24h-2026-04-25"
+    },
+    {
+      "key": "audit_log_destination",
+      "chosen_value": "audit_log table with workspace_id scope",
+      "rationale": "Same destination, scoped to workspace deletes for compliance reporting.",
+      "substrate_citation_id": null
+    },
+    {
+      "key": "owner_orphan_check",
+      "chosen_value": "block deletion if solo-owner without explicit ownership transfer",
+      "rationale": "Beat 4 dec-owner-orphan-check rule — workspace cannot be orphaned.",
+      "substrate_citation_id": "dec-owner-orphan-check-2026-04-25"
+    }
+  ]
+}

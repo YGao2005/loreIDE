@@ -1,0 +1,23 @@
+{
+  "atom_uuid": "AccountSettings.DangerZone",
+  "decisions": [
+    {
+      "key": "email_link_expiry_hours",
+      "chosen_value": "24",
+      "rationale": "Industry standard for destructive-action confirmation; matches dec-confirm-via-email-link expectation that the link is used promptly.",
+      "substrate_citation_id": null
+    },
+    {
+      "key": "audit_log_destination",
+      "chosen_value": "audit_log table",
+      "rationale": "Inferred from existing project schema; centralized audit trail is repo convention.",
+      "substrate_citation_id": null
+    },
+    {
+      "key": "cleanup_execution_mode",
+      "chosen_value": "background job (async)",
+      "rationale": "Derived from contract role 'primary action' — UI must respond immediately; cleanup runs after grace window.",
+      "substrate_citation_id": null
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "session_id": "test-session-0001",
+  "transcript_path": "FIXTURE_TRANSCRIPT_PATH",
+  "cwd": "FIXTURE_CWD",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Write",
+  "tool_input": {
+    "file_path": "FIXTURE_FILE_PATH",
+    "content": "export const sample = 42;\n"
+  },
+  "tool_response": {
+    "success": true
+  }
+}

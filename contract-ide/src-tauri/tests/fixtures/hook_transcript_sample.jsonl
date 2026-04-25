@@ -1,0 +1,5 @@
+{"type":"user","message":{"role":"user","content":"Add a new export to the sample file."}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I'll add the export now."}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_001","name":"Write","input":{"file_path":"src/sample.ts","content":"export const sample = 42;"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_001","content":"File created"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Done."}]}}
