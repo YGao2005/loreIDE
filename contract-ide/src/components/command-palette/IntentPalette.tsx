@@ -207,6 +207,7 @@ export function IntentPalette() {
       open={open}
       onOpenChange={(next) => (next ? setOpen(true) : close())}
       label="Find by intent"
+      shouldFilter={false}
     >
       {/* cmdk owns the input rendering — pass value/onValueChange so the
           hidden internal state stays in sync with the React state we drive
@@ -219,12 +220,7 @@ export function IntentPalette() {
         autoFocus
       />
       <Command.List>
-        {/* We disable cmdk's built-in fuzzy filter (`shouldFilter={false}`)
-            implicitly by keying every Command.Item with `value={hit.uuid}`
-            and not relying on cmdk's match algorithm. The Rust IPC is the
-            authoritative ranker — cmdk would re-filter the already-ranked
-            list and demote substrate hits whose `name` doesn't share many
-            characters with the query. */}
+        {/* shouldFilter={false} above — IPC is the authoritative BM25 ranker; cmdk renders our pre-ranked list without re-sorting. */}
         {loading && (
           <Command.Loading>
             <div className="px-3 py-2 text-xs text-muted-foreground">Searching…</div>
