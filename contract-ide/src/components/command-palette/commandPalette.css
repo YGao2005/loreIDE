@@ -1,0 +1,71 @@
+/* cmdk command palette styles. Keeps the layer outside Tailwind so the
+   data-attribute selectors cmdk emits are not stripped by JIT. */
+
+[cmdk-overlay] {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  z-index: 50;
+}
+
+[cmdk-dialog] {
+  position: fixed;
+  top: 20%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(640px, 92vw);
+  background: var(--background);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  z-index: 51;
+  overflow: hidden;
+  font-size: 14px;
+}
+
+[cmdk-input] {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  padding: 14px 16px;
+  outline: none;
+  color: inherit;
+  font-size: 15px;
+}
+
+[cmdk-list] {
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+[cmdk-group-heading] {
+  padding: 8px 10px 4px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted-foreground);
+}
+
+[cmdk-item] {
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+[cmdk-item][data-selected='true'] {
+  background: var(--muted);
+  color: var(--foreground);
+}
+
+[cmdk-empty] {
+  padding: 16px;
+  text-align: center;
+  color: var(--muted-foreground);
+}
