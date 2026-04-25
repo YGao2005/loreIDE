@@ -48,9 +48,16 @@ pub async fn compose_prompt(
         "SELECT uuid, level, parent_uuid, contract_body, name FROM nodes WHERE uuid = ?"
     )
     .bind(scope_uuid)
-    .fetch_one(&pool)
+    .fetch_optional(&pool)
     .await
-    .map_err(|e| format!("contract lookup: {e}"))?;
+    .map_err(|e| format!("contract lookup (uuid={scope_uuid}): {e}"))?
+    .ok_or_else(|| {
+        format!(
+            "contract lookup: no node found for scope_uuid={scope_uuid}. \
+             The selected node may belong to a different repo or have been removed by a rescan. \
+             Try clicking another node, or reopen the repo to refresh the canonical nodes table."
+        )
+    })?;
 
     let body = contract
         .contract_body
