@@ -22,4 +22,5 @@ pub mod repo;
 pub mod retrieval;
 pub mod rollup;
 pub mod session;
+pub mod substrate_panel;
 pub mod validation;

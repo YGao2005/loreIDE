@@ -82,6 +82,8 @@ pub fn run() {
             commands::delegate::delegate_plan,
             commands::delegate::delegate_execute,
             commands::delegate::ensure_decisions_manifest,
+            commands::substrate_panel::list_substrate_for_atom,
+            commands::substrate_panel::get_total_substrate_count,
         ])
         .setup(|app| {
             let window = app

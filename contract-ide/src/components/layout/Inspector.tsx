@@ -14,6 +14,7 @@ import ReconcilePanel from '@/components/inspector/ReconcilePanel';
 import { CherrypickModal } from '@/components/cherrypick/CherrypickModal';
 import { SimplifiedInspector } from '@/components/inspector/SimplifiedInspector';
 import { DelegateButton } from '@/components/inspector/DelegateButton';
+import { SubstrateSidePanel } from '@/components/inspector/SubstrateSidePanel';
 
 /**
  * Right-hand inspector panel (SHELL-01 + SHELL-05 + INSP-01 + INSP-05).
@@ -50,6 +51,7 @@ const TABS: InspectorTab[] = ['Contract', 'Code', 'Preview'];
 export function Inspector() {
   const [activeTab, setActiveTab] = useState<InspectorTab>('Contract');
   const [reconcileOpen, setReconcileOpen] = useState(false);
+  const [substrateOpen, setSubstrateOpen] = useState(false);
 
   const selectedNodeUuid = useGraphStore((s) => s.selectedNodeUuid);
   const nodes = useGraphStore((s) => s.nodes);
@@ -82,6 +84,12 @@ export function Inspector() {
   // while the dialog is open.
   useEffect(() => {
     setReconcileOpen(false);
+  }, [selectedNodeUuid]);
+
+  // Phase 11 Plan 05: close the Substrate side panel on node switch (mirror
+  // ReconcilePanel pattern above — no stale lineage scope in the panel).
+  useEffect(() => {
+    setSubstrateOpen(false);
   }, [selectedNodeUuid]);
 
   // Phase 4 Plan 04-02: seed the editor store's text + selectedNode slice
@@ -278,15 +286,33 @@ export function Inspector() {
 
       {/* Phase 11 Plan 04: Delegate button — ALWAYS-VISIBLE footer regardless of active tab.
           Lives in the Inspector container (not the tab body) so it survives tab switches.
-          Contextual to the NODE not the tab per CONTEXT lock. */}
+          Contextual to the NODE not the tab per CONTEXT lock.
+          Phase 11 Plan 05: Substrate link sits below the Delegate button in the same footer. */}
       {selectedNode && (
-        <div className="shrink-0 border-t border-border bg-muted/20 p-3">
+        <div className="shrink-0 border-t border-border bg-muted/20 p-3 space-y-2">
           <DelegateButton
             scopeUuid={selectedNode.uuid}
             level={selectedNode.level}
             atomUuid={selectedNode.uuid}
           />
+          <button
+            type="button"
+            onClick={() => setSubstrateOpen(true)}
+            className="w-full text-left text-xs text-muted-foreground hover:text-foreground hover:underline transition-colors"
+            title="Browse lineage-scoped substrate (read-only, no LLM rerank)"
+          >
+            Substrate (lineage-scoped) →
+          </button>
         </div>
+      )}
+
+      {/* Phase 11 Plan 05: Substrate side panel — right-edge overlay, READ-ONLY.
+          Auto-closes on node switch via the useEffect above. */}
+      {substrateOpen && selectedNode && (
+        <SubstrateSidePanel
+          scopeUuid={selectedNode.uuid}
+          onClose={() => setSubstrateOpen(false)}
+        />
       )}
     </div>
   );
