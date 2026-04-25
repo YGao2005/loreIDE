@@ -306,7 +306,7 @@ Plans:
 - [ ] 13-01-PLAN.md — Wave 1: Substrate state infrastructure (useSubstrateStore + IPC + CVA variants + resolveNodeState compositor + focusedAtomUuid slice on graphStore) [SUB-08, CHIP-03]
 - [ ] 13-02-PLAN.md — Wave 2: Sidebar replacing L0/L1 abstract zoom (area tree + per-area health badges + flow expand; lens switcher REMOVED) [SIDEBAR-01]
 - [ ] 13-03-PLAN.md — Wave 2: Cmd+P intent palette (find_substrate_by_intent IPC + flow-aware landing + 10-query precision test fixture) [SUB-08]
-- [ ] 13-04-PLAN.md — Wave 2: ServiceCard / EndpointCard backend-mode L3 trigger card (method-colored badges + Inputs/Outputs/Side-effects from BACKEND-FM-01 + ServiceCardChips) [CARD-02, CARD-03, CHIP-02]
+- [x] 13-04-PLAN.md — Wave 2: ServiceCard / EndpointCard backend-mode L3 trigger card (method-colored badges + Inputs/Outputs/Side-effects from BACKEND-FM-01 + ServiceCardChips) [CARD-02, CARD-03, CHIP-02]
 - [ ] 13-05-PLAN.md — Wave 2: ScreenCard UI-mode L3 trigger card (iframe + parent-layer chip overlay via postMessage/same-origin + Inspect/Interact toggle) [CARD-01, CHIP-01]
 - [ ] 13-06-PLAN.md — Wave 3: Vertical participant chain layout (assembleFlowChain + CallShapeEdge + iframe→screenshot fallback for two-flow case) [CHAIN-01, CHAIN-02, CHIP-02]
 - [ ] 13-07-PLAN.md — Wave 4: Chat archaeology (SubstrateCitation pill + SourceArchaeologyModal + citation halo wiring across cards/chips) [SUB-08]
@@ -334,4 +334,4 @@ Phases execute in numeric order; Phase 5 can run in parallel with Phase 3 after 
 | 10. Session Watcher + Filter Pipeline | 4/4 | Complete    | 2026-04-25 |
 | 11. Distiller + Constraint Store + Contract-Anchored Retrieval | 5/5 | Complete   | 2026-04-25 |
 | 12. Conflict / Supersession Engine | 4/4 | In Progress (12-04 Tasks 1+2 shipped; Task 3 UAT human-verify pending Yang sign-off) |  |
-| 13. Substrate UI + New Visual Model + Demo Polish | 1/12 | In Progress|  |
+| 13. Substrate UI + New Visual Model + Demo Polish | 2/12 | In Progress|  |
