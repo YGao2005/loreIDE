@@ -66,17 +66,20 @@ Output ONLY a JSON array of indices like [3, 7, 1, 5, 2]. No commentary."#,
         n = candidates.len(),
     );
 
-    // Pipe prompt via stdin (not -p arg) — see plan_review.rs for the rationale.
-    // Newer Claude CLI versions warn + exit non-zero when stdin is piped open
-    // without data; passing the prompt via stdin gives an explicit EOF.
+    // Lean-mode flags: see plan_review.rs for rationale. Skips MCP/skills/persistence
+    // but keeps OAuth/keychain auth (no ANTHROPIC_API_KEY required).
     let prompt_owned = prompt;
-    let output = tokio::task::spawn_blocking(move || -> Result<std::process::Output, String> {
+    let output_future = tokio::task::spawn_blocking(move || -> Result<std::process::Output, String> {
         let mut child = Command::new("claude")
             .args([
                 "-p",
                 "--output-format",
                 "json",
-                // --bare dropped: see plan_review.rs. Claude Code-only auth path.
+                "--strict-mcp-config",
+                "--mcp-config",
+                r#"{"mcpServers":{}}"#,
+                "--disable-slash-commands",
+                "--no-session-persistence",
             ])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -91,9 +94,18 @@ Output ONLY a JSON array of indices like [3, 7, 1, 5, 2]. No commentary."#,
         child
             .wait_with_output()
             .map_err(|e| format!("rerank claude wait: {e}"))
-    })
-    .await
-    .map_err(|e| format!("rerank task join: {e}"))??;
+    });
+
+    // 30s hard timeout — fall back to FTS5 ordering if claude hangs.
+    let output = match tokio::time::timeout(std::time::Duration::from_secs(30), output_future).await {
+        Err(_) => {
+            eprintln!("[rerank] claude timed out after 30s; falling back to FTS5 order");
+            return Ok(candidates.iter().take(top_k).cloned().collect());
+        }
+        Ok(Err(e)) => return Err(format!("rerank task join: {e}")),
+        Ok(Ok(Err(e))) => return Err(e),
+        Ok(Ok(Ok(out))) => out,
+    };
 
     if !output.status.success() {
         // Fallback: original ordering

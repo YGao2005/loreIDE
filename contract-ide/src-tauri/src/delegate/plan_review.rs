@@ -72,7 +72,12 @@ Output ONLY a JSON object matching the schema. No commentary, no code, no edits.
     let schema_str = schema.to_string();
     let directive_owned = planning_directive.to_string();
 
-    let output = tokio::task::spawn_blocking(move || -> Result<std::process::Output, String> {
+    // Lean-mode flags: skip MCP discovery + skills + session persistence, but
+    // keep OAuth/keychain auth (so we don't need ANTHROPIC_API_KEY). Cuts
+    // claude startup from ~15-20s (with full plugin/MCP roster) to ~3-5s.
+    // Trade-off vs --bare: still pays for keychain read + CLAUDE.md auto-discovery
+    // but skips the MCP servers + skill registry + session journaling.
+    let output_future = tokio::task::spawn_blocking(move || -> Result<std::process::Output, String> {
         let mut child = Command::new("claude")
             .args([
                 "-p",
@@ -82,9 +87,11 @@ Output ONLY a JSON object matching the schema. No commentary, no code, no edits.
                 "json",
                 "--json-schema",
                 &schema_str,
-                // --bare dropped: requires ANTHROPIC_API_KEY (OAuth keychain ignored).
-                // For Claude Code-only auth we accept the 1-3s CLAUDE.md/MCP discovery
-                // overhead. Pitfall 3 from plan 11-04 — revisit if demo timing slips.
+                "--strict-mcp-config",
+                "--mcp-config",
+                r#"{"mcpServers":{}}"#,
+                "--disable-slash-commands",
+                "--no-session-persistence",
             ])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -95,14 +102,19 @@ Output ONLY a JSON object matching the schema. No commentary, no code, no edits.
             stdin
                 .write_all(prompt_owned.as_bytes())
                 .map_err(|e| format!("planning stdin write: {e}"))?;
-            // Drop closes stdin → claude sees EOF and proceeds.
         }
         child
             .wait_with_output()
             .map_err(|e| format!("planning claude wait: {e}"))
-    })
-    .await
-    .map_err(|e| format!("planning task join: {e}"))??;
+    });
+
+    // 45s hard timeout — fail fast if claude hangs (vs the previous unbounded wait).
+    let output = match tokio::time::timeout(std::time::Duration::from_secs(45), output_future).await {
+        Err(_) => return Err("planning claude timed out after 45s".into()),
+        Ok(Err(e)) => return Err(format!("planning task join: {e}")),
+        Ok(Ok(Err(e))) => return Err(e),
+        Ok(Ok(Ok(out))) => out,
+    };
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);

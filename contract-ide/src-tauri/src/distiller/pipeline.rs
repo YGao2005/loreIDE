@@ -109,7 +109,11 @@ pub async fn distill_episode(app: &AppHandle, episode_id: &str) -> Result<usize,
                     "json",
                     "--json-schema",
                     &schema_str,
-                    // --bare dropped: see plan_review.rs. Claude Code-only auth path.
+                    "--strict-mcp-config",
+                    "--mcp-config",
+                    r#"{"mcpServers":{}}"#,
+                    "--disable-slash-commands",
+                    "--no-session-persistence",
                 ])
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
