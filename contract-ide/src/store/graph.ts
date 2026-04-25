@@ -29,6 +29,20 @@ export type LensId = 'journey' | 'system' | 'ownership';
 interface GraphState {
   nodes: ContractNode[];
   selectedNodeUuid: string | null;
+  /**
+   * Phase 13 Plan 01: focused atom uuid for chip-halo on ScreenCard / FlowChain.
+   *
+   * Distinct from `selectedNodeUuid` — that one drives the Inspector tab; this
+   * one drives a transient halo on a single atom chip inside a card. Plan 13-03
+   * (Cmd+P atom-hit landing) writes it; Plan 13-05 (ScreenCard chip halo) reads
+   * it. Reset to null when the user clicks elsewhere or after a 2s halo timeout
+   * managed by ScreenCard.
+   *
+   * Lives on graphStore (not substrateStore) because focus is a UI-interaction
+   * marker, not a substrate semantic — colocated with `selectedNodeUuid` so the
+   * "what's emphasised on canvas?" question has one mental model.
+   */
+  focusedAtomUuid: string | null;
   currentLens: LensId;
   // Drill-in stack: parentUuidStack[0] is the L0 root; subsequent entries are
   // the user's drill path (L1, L2, L3...). The breadcrumb maps each entry to
@@ -47,6 +61,8 @@ interface GraphState {
   repoPath: string | null;
 
   selectNode: (uuid: string | null) => void;
+  /** Phase 13 Plan 01: setter for `focusedAtomUuid`. */
+  setFocusedAtomUuid: (uuid: string | null) => void;
   setLens: (lens: LensId) => Promise<void>;
   pushParent: (uuid: string) => void;
   popParent: () => void;
@@ -90,12 +106,14 @@ export function getCurrentFlowUuid(
 export const useGraphStore = create<GraphState>((set, get) => ({
   nodes: [],
   selectedNodeUuid: null,
+  focusedAtomUuid: null,
   currentLens: 'journey',
   parentUuidStack: [],
   fetchGeneration: 0,
   repoPath: null,
 
   selectNode: (selectedNodeUuid) => set({ selectedNodeUuid }),
+  setFocusedAtomUuid: (focusedAtomUuid) => set({ focusedAtomUuid }),
   setRepoPath: (repoPath) => set({ repoPath }),
 
   getFlowMembers: (flowUuid: string) => {
