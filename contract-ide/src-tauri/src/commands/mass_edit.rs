@@ -158,6 +158,49 @@ fn find_snippet_section(snippet: &str, sections: &HashMap<String, String>) -> Op
     None
 }
 
+/// Build an FTS5 MATCH expression from a free-form user query.
+///
+/// FTS5's default tokenization treats whitespace-separated terms as implicit
+/// AND — a natural-language query like `"add audit logging to every destructive
+/// endpoint"` requires every word to appear in the same row, returning 0 hits.
+/// We OR-tokenize so any single matching term contributes; BM25 ranking demotes
+/// common words naturally.
+///
+/// Pass-through behavior: if the user already wrote a structured FTS query
+/// (uppercase AND/OR/NOT, NEAR, or quoted phrases), respect it verbatim.
+fn build_fts_query(user_query: &str) -> String {
+    let trimmed = user_query.trim();
+    if trimmed.is_empty() {
+        return trimmed.to_string();
+    }
+
+    // Detect structured queries — pass through.
+    let upper = trimmed.to_ascii_uppercase();
+    let has_operator = upper.contains(" AND ")
+        || upper.contains(" OR ")
+        || upper.contains(" NOT ")
+        || upper.contains(" NEAR(")
+        || trimmed.contains('"');
+    if has_operator {
+        return trimmed.to_string();
+    }
+
+    // Split on any non-alphanumeric (whitespace + punctuation), FTS5-quote
+    // each term, join with " OR ". This way "account-button.tsx" yields three
+    // tokens (account, button, tsx) rather than one merged blob.
+    let tokens: Vec<String> = trimmed
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|t| !t.is_empty())
+        .map(|t| format!("\"{t}\""))
+        .collect();
+
+    if tokens.is_empty() {
+        trimmed.to_string()
+    } else {
+        tokens.join(" OR ")
+    }
+}
+
 /// Tauri command: mass-edit retrieval via FTS5 + section-weighted re-ranking.
 ///
 /// Returns a JSON-serialized MassMatchResponse. The React frontend calls this
@@ -172,6 +215,7 @@ pub async fn find_by_intent_mass(
     limit: Option<u32>,
 ) -> Result<MassMatchResponse, String> {
     let cap = limit.unwrap_or(100) as i64;
+    let fts_match = build_fts_query(&query);
 
     let instances = app.state::<DbInstances>();
     let db_map = instances.0.read().await;
@@ -203,7 +247,7 @@ pub async fn find_by_intent_mass(
             LIMIT ?2
             "#,
         )
-        .bind(&query)
+        .bind(&fts_match)
         .bind(cap)
         .fetch_all(&pool)
         .await
@@ -262,4 +306,54 @@ pub async fn find_by_intent_mass(
         embedding_status: "disabled".to_string(),
         matches: results,
     })
+}
+
+#[cfg(test)]
+mod fts_query_tests {
+    use super::build_fts_query;
+
+    #[test]
+    fn natural_language_or_tokenizes() {
+        let q = build_fts_query("add audit logging to every destructive endpoint");
+        assert_eq!(
+            q,
+            r#""add" OR "audit" OR "logging" OR "to" OR "every" OR "destructive" OR "endpoint""#
+        );
+    }
+
+    #[test]
+    fn structured_or_passes_through() {
+        let q = build_fts_query("audit OR destructive");
+        assert_eq!(q, "audit OR destructive");
+    }
+
+    #[test]
+    fn structured_and_passes_through() {
+        let q = build_fts_query("audit AND logging");
+        assert_eq!(q, "audit AND logging");
+    }
+
+    #[test]
+    fn quoted_phrase_passes_through() {
+        let q = build_fts_query(r#""destructive endpoint""#);
+        assert_eq!(q, r#""destructive endpoint""#);
+    }
+
+    #[test]
+    fn punctuation_splits_tokens() {
+        let q = build_fts_query("delete: account-button.tsx");
+        assert_eq!(q, r#""delete" OR "account" OR "button" OR "tsx""#);
+    }
+
+    #[test]
+    fn empty_returns_empty() {
+        assert_eq!(build_fts_query(""), "");
+        assert_eq!(build_fts_query("   "), "");
+    }
+
+    #[test]
+    fn single_term_quoted() {
+        let q = build_fts_query("destructive");
+        assert_eq!(q, r#""destructive""#);
+    }
 }
