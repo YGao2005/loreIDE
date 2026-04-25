@@ -7,6 +7,8 @@ import { useGraphStore } from '@/store/graph';
 import { subscribeDriftChanged } from '@/ipc/drift';
 import { listRollupStates, subscribeRollupChanged } from '@/ipc/rollup';
 import { useRollupStore } from '@/store/rollup';
+import { getSubstrateStatesForCanvas } from '@/ipc/substrate';
+import { useSubstrateStore, type SubstrateNodeState } from '@/store/substrate';
 import { subscribeAgentStream, subscribeAgentComplete } from '@/ipc/agent';
 import { subscribeReceiptCreated } from '@/ipc/receipts';
 import { useAgentStore } from '@/store/agent';
@@ -161,6 +163,37 @@ export function AppShell() {
     return () => {
       cancelled = true;
       unsub?.();
+    };
+  }, []);
+
+  // Phase 13 Plan 01: hydrate substrate state map for canvas coloring.
+  // get_substrate_states_for_canvas reads substrate_nodes (Phase 11 / 12 schema)
+  // and returns one SubstrateNodeSummary per row. We feed it into the new
+  // useSubstrateStore.bulkSet slice (sibling to the existing footer-counter
+  // slice). The IPC is defensive — if substrate_nodes is missing or empty, it
+  // returns [] and we set an empty Map.
+  //
+  // Plan 13-09 will add a substrate:updated event subscription here. For now
+  // we hydrate ONCE on mount; if Phase 11/12 distillers run during the session,
+  // the canvas will need a manual re-hydration (or repo re-open) until 13-09.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const nodes = await getSubstrateStatesForCanvas();
+        if (cancelled) return;
+        const updates = nodes.map((n) => ({
+          uuid: n.uuid,
+          state: n.state as SubstrateNodeState,
+        }));
+        useSubstrateStore.getState().bulkSet(updates);
+      } catch (err) {
+        // Non-fatal: app boots without substrate overlays.
+        console.warn('[AppShell] getSubstrateStatesForCanvas failed (non-fatal):', err);
+      }
+    })();
+    return () => {
+      cancelled = true;
     };
   }, []);
 

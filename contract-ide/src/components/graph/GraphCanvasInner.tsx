@@ -12,12 +12,14 @@ import { useDriftStore } from '@/store/drift';
 import { useCherrypickStore } from '@/store/cherrypick';
 import { useRollupStore } from '@/store/rollup';
 import { useMassEditStore } from '@/store/massEdit';
+import { useSubstrateStore, type SubstrateNodeState } from '@/store/substrate';
 import { useUiStore } from '@/store/ui';
 import { getEdges } from '@/ipc/graph';
 import { nodeTypes } from './nodeTypes';
 import type { ContractNodeData } from './ContractNode';
 import type { GroupNodeData } from './GroupNode';
 import { layoutNodes } from './layout';
+import { resolveNodeState } from './contractNodeStyles';
 import type { ContractNode as RowContractNode, GraphEdge } from '@/ipc/types';
 
 // Phase 3 Plan 03-03 (dagre drive-by): hierarchical layout now runs through
@@ -31,6 +33,12 @@ import type { ContractNode as RowContractNode, GraphEdge } from '@/ipc/types';
 // parent.
 
 type FlowNode = Node<ContractNodeData> | Node<GroupNodeData>;
+
+// Phase 13 Plan 01: stable empty Set used to "hide" rollup overlays in Copy
+// Mode without introducing a downstream branch. Defined at module scope so
+// the reference is stable across renders (useMemo wouldn't catch a fresh
+// `new Set()` allocation as equal).
+const EMPTY_SET: Set<string> = new Set();
 
 /**
  * Build the React Flow node array from contract rows.
@@ -70,6 +78,10 @@ function buildFlowNodes(
   targetedNodeUuid: string | null,
   copyModeActive: boolean,
   massMatchedUuids: Map<string, number>,
+  // Phase 13 Plan 01: substrate state map keyed by contract atom uuid.
+  // Drives the orange (intent_drifted) and orange-muted (superseded) overlays
+  // composed by resolveNodeState. AppShell hydrates this on mount.
+  substrateStates: Map<string, SubstrateNodeState>,
 ): FlowNode[] {
   const laidOut = layoutNodes(rows);
   const byId = new Map<string, RowContractNode>();
@@ -96,33 +108,70 @@ function buildFlowNodes(
       } as Node<ContractNodeData>;
     }
 
-    // Phase 7 Plan 07-03 (DRIFT-01): drift overrides all other health states.
-    // Phase 9 Plan 09-01 (MASS-01): mass_matched is transient amber — drifted wins.
+    // Phase 13 Plan 01: compose visual state via resolveNodeState, then map to
+    // the existing CVA (state, rollupState) variant pair.
     //
-    // Precedence: drifted (red) > mass_matched (amber transient) > healthy.
-    // The --match-delay CSS variable is passed via massMatchDelay in node.data.
+    // Precedence (top to bottom):
+    //   drifted (red) > intent_drifted (orange + glow) > rollup_stale (amber)
+    //   > mass_matched (amber transient) > superseded (orange muted)
+    //   > rollup_untracked (gray) > healthy
+    //
+    // mass_matched is INSERTED between rollup_stale and superseded — it's a
+    // transient amber pulse triggered by review queue (MASS-01) and we want
+    // it to take priority over the substrate "superseded" softer signal but
+    // not over drift, intent_drifted, or persistent rollup_stale.
+    //
+    // Phase 9 Plan 09-03 (NONC-01): when Copy Mode is active, hide amber/gray
+    // overlays from non-coders by forcing rollup-state inputs to empty sets.
     const massDelay = massMatchedUuids.get(row.uuid);
     const isMassMatched = massDelay !== undefined;
-    const state = driftedUuids.has(row.uuid)
-      ? ('drifted' as const)
-      : isMassMatched
-        ? ('mass_matched' as const)
-        : ('healthy' as const);
 
-    // Phase 8 Plan 08-02: rollup state (amber / gray / fresh).
-    // L0 nodes will never appear in either set (Rust engine exempt).
-    // Precedence is applied in contractNodeStyles.ts compoundVariants:
-    //   drifted (red) > rollup_stale (amber) > rollup_untracked (gray) > targeted (teal)
-    //
-    // Phase 9 Plan 09-03 (NONC-01): when Copy Mode is active, non-coders never
-    // see rollup amber/gray overlays — hide them by forcing 'fresh' state.
-    const rollupState = copyModeActive
-      ? ('fresh' as const) // hide amber/gray overlays from non-coders per NONC-01 spec
-      : rollupStaleUuids.has(row.uuid)
-        ? ('stale' as const)
-        : untrackedUuids.has(row.uuid)
-          ? ('untracked' as const)
-          : ('fresh' as const);
+    // Empty fallbacks honor copyModeActive without adding a branch downstream.
+    const effectiveRollupStale = copyModeActive ? EMPTY_SET : rollupStaleUuids;
+    const effectiveUntracked = copyModeActive ? EMPTY_SET : untrackedUuids;
+
+    const visual = resolveNodeState(
+      row.uuid,
+      driftedUuids,
+      effectiveRollupStale,
+      effectiveUntracked,
+      substrateStates,
+    );
+
+    // Map NodeVisualState → (state, rollupState) variants used by contractNodeStyles.ts.
+    // Phase 9 mass_matched is layered in: only emitted when no higher-priority
+    // visual state applies (i.e. visual === 'healthy' or 'rollup_untracked').
+    let state:
+      | 'healthy'
+      | 'drifted'
+      | 'mass_matched'
+      | 'intent_drifted'
+      | 'superseded' = 'healthy';
+    let rollupState: 'fresh' | 'stale' | 'untracked' = 'fresh';
+    switch (visual) {
+      case 'drifted':
+        state = 'drifted';
+        break;
+      case 'intent_drifted':
+        state = 'intent_drifted';
+        break;
+      case 'superseded':
+        state = 'superseded';
+        break;
+      case 'rollup_stale':
+        rollupState = 'stale';
+        break;
+      case 'rollup_untracked':
+        rollupState = 'untracked';
+        // Allow mass_matched to layer on gray (transient pulse on otherwise
+        // untracked node — useful when a fresh node enters the review queue
+        // before it's been rolled-up).
+        if (isMassMatched) state = 'mass_matched';
+        break;
+      case 'healthy':
+        if (isMassMatched) state = 'mass_matched';
+        break;
+    }
 
     // Phase 8 Plan 08-05 (CHRY-01): targeted ring glow.
     // Precedence is enforced in contractNodeStyles.ts compoundVariants so drift/
@@ -192,6 +241,12 @@ export function GraphCanvasInner() {
   // Zustand's referential inequality check triggers a re-render here. Reset via
   // clearMatches() when 09-02's review queue closes.
   const massMatchedUuids = useMassEditStore((s) => s.matchedUuids);
+  // Phase 13 Plan 01: substrate state map for orange overlays (intent_drifted +
+  // superseded). Each bulkSet/setNodeState produces a new Map identity so
+  // Zustand's referential inequality triggers a re-render here. Hydrated by
+  // AppShell on mount; future plan 13-09 wires substrate engine events to keep
+  // it live during the demo.
+  const substrateStates = useSubstrateStore((s) => s.nodeStates);
   // Phase 9 Plan 09-03 (NONC-01): Copy Mode filter — graph shows L4 atoms only.
   const copyModeActive = useUiStore((s) => s.copyModeActive);
   const pushParent = useGraphStore((s) => s.pushParent);
@@ -237,8 +292,18 @@ export function GraphCanvasInner() {
       targetedNodeUuid,
       copyModeActive,
       massMatchedUuids,
+      substrateStates,
     );
-  }, [rows, driftedUuids, rollupStaleUuids, untrackedUuids, targetedNodeUuid, copyModeActive, massMatchedUuids]);
+  }, [
+    rows,
+    driftedUuids,
+    rollupStaleUuids,
+    untrackedUuids,
+    targetedNodeUuid,
+    copyModeActive,
+    massMatchedUuids,
+    substrateStates,
+  ]);
 
   // RESEARCH §Pitfall 9 — `fitView` prop races with `onlyRenderVisibleElements`
   // because virtualized nodes have no measured dimensions on first paint, so
