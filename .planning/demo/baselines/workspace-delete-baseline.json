@@ -1,0 +1,22 @@
+{
+  "name": "workspace-delete",
+  "prompt": "add a delete-workspace button to the team settings page",
+  "recorded_at": "2026-04-25T10:25:23Z",
+  "demo_repo_sha": "9f5029b0f4667ef4c5182a5386092b8e201e01af",
+  "claude_version": "2.1.119 (Claude Code)",
+  "conditions": {
+    "no_contracts_dir": true,
+    "no_claude_md": true,
+    "no_mcp_json": true
+  },
+  "session_jsonl": "/Users/yang/.claude/projects/-Users-yang-lahacks-contract-ide-demo/48fa4ca4-ebd4-42a2-88e8-4e1af24fe232.jsonl",
+  "wall_time_seconds": 72,
+  "metrics": {
+    "input_tokens": 32,
+    "output_tokens": 9284,
+    "cache_creation_input_tokens": 52090,
+    "cache_read_tokens": 863184,
+    "tool_calls": 13
+  },
+  "notes": "input_tokens=32 is the fresh prompt-only tokens. cache_creation_input_tokens=52090 is first-read codebase context. cache_read_tokens=863184 is subsequent cached reads. The pre-estimate of ~6,800 input_tokens in the presentation script assumed a much smaller demo repo. Actual: 49 contracts + full Next.js + Prisma + Stripe + Mailchimp (800k+ tokens total context at this call). Tool call count: 13 actual vs ~19 estimate — lower because DEMO-SETUP.md provides orientation, and the workspace task mirrors the account task structurally. Baseline is valid for the delta claim."
+}

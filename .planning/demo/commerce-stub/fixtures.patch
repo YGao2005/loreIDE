@@ -1,0 +1,275 @@
+diff --git a/lib/shopify/fixtures.ts b/lib/shopify/fixtures.ts
+new file mode 100644
+index 0000000..a85b8a5
+--- /dev/null
++++ b/lib/shopify/fixtures.ts
+@@ -0,0 +1,269 @@
++// Fixture data for running vercel/commerce without a Shopify backend.
++// Used as fallback when SHOPIFY_STORE_DOMAIN is empty or unset.
++// Shape matches the reshaped Shopify types returned by lib/shopify/index.ts.
++
++import type { Cart, Collection, Menu, Page, Product } from "./types";
++
++const img = (w: number, h: number, seed: string) => ({
++  url: `https://picsum.photos/seed/${seed}/${w}/${h}`,
++  altText: seed,
++  width: w,
++  height: h,
++});
++
++const money = (amount: string) => ({ amount, currencyCode: "USD" });
++
++const mkProduct = (
++  handle: string,
++  title: string,
++  description: string,
++  price: string,
++  seed: string,
++  tags: string[] = []
++): Product => {
++  const variantId = `gid://shopify/ProductVariant/${handle}-default`;
++  return {
++    id: `gid://shopify/Product/${handle}`,
++    handle,
++    availableForSale: true,
++    title,
++    description,
++    descriptionHtml: `<p>${description}</p>`,
++    options: [
++      {
++        id: `gid://shopify/ProductOption/${handle}-size`,
++        name: "Size",
++        values: ["S", "M", "L", "XL"],
++      },
++    ],
++    priceRange: {
++      minVariantPrice: money(price),
++      maxVariantPrice: money(price),
++    },
++    variants: [
++      {
++        id: variantId,
++        title: "M",
++        availableForSale: true,
++        selectedOptions: [{ name: "Size", value: "M" }],
++        price: money(price),
++      },
++    ],
++    featuredImage: img(800, 800, seed),
++    images: [img(1200, 1200, seed), img(1200, 1200, `${seed}-2`)],
++    seo: { title, description },
++    tags,
++    updatedAt: "2026-04-24T00:00:00Z",
++  };
++};
++
++export const PRODUCTS: Product[] = [
++  mkProduct(
++    "acme-tee",
++    "Acme Classic Tee",
++    "Soft cotton tee with the Acme monogram.",
++    "29.00",
++    "tee-classic",
++    ["apparel"]
++  ),
++  mkProduct(
++    "acme-hoodie",
++    "Acme Pullover Hoodie",
++    "Midweight fleece pullover in washed graphite.",
++    "79.00",
++    "hoodie-pullover",
++    ["apparel"]
++  ),
++  mkProduct(
++    "acme-cap",
++    "Acme Field Cap",
++    "Six-panel twill cap with brass buckle.",
++    "32.00",
++    "cap-field",
++    ["accessories"]
++  ),
++  mkProduct(
++    "acme-tote",
++    "Acme Heavyweight Tote",
++    "16 oz canvas tote, reinforced stitching, leather handles.",
++    "48.00",
++    "tote-heavy",
++    ["accessories", "featured"]
++  ),
++  mkProduct(
++    "acme-mug",
++    "Acme Ceramic Mug",
++    "12 oz stoneware, hand-glazed in small batches.",
++    "18.00",
++    "mug-ceramic",
++    ["accessories", "featured"]
++  ),
++  mkProduct(
++    "acme-notebook",
++    "Acme Field Notebook",
++    "A6 hardcover, 192 pages, dot-grid, Smyth-sewn.",
++    "24.00",
++    "notebook-a6",
++    ["accessories", "featured"]
++  ),
++  mkProduct(
++    "acme-socks",
++    "Acme Crew Socks (2-pack)",
++    "Combed cotton crew socks, reinforced heel and toe.",
++    "22.00",
++    "socks-crew",
++    ["apparel"]
++  ),
++  mkProduct(
++    "acme-jacket",
++    "Acme Coach Jacket",
++    "Water-resistant shell with flannel lining.",
++    "139.00",
++    "jacket-coach",
++    ["apparel"]
++  ),
++];
++
++export const COLLECTIONS: Collection[] = [
++  {
++    handle: "all",
++    title: "All",
++    description: "Everything Acme makes.",
++    seo: { title: "All Products", description: "Everything Acme makes." },
++    updatedAt: "2026-04-24T00:00:00Z",
++    path: "/search/all",
++  },
++  {
++    handle: "apparel",
++    title: "Apparel",
++    description: "Tees, hoodies, and layers.",
++    seo: { title: "Apparel", description: "Tees, hoodies, and layers." },
++    updatedAt: "2026-04-24T00:00:00Z",
++    path: "/search/apparel",
++  },
++  {
++    handle: "accessories",
++    title: "Accessories",
++    description: "Bags, caps, and small goods.",
++    seo: { title: "Accessories", description: "Bags, caps, and small goods." },
++    updatedAt: "2026-04-24T00:00:00Z",
++    path: "/search/accessories",
++  },
++];
++
++export const PRODUCTS_BY_COLLECTION: Record<string, Product[]> = {
++  all: PRODUCTS,
++  apparel: PRODUCTS.filter((p) => p.tags.includes("apparel")),
++  accessories: PRODUCTS.filter((p) => p.tags.includes("accessories")),
++  "hidden-homepage-featured-items": PRODUCTS.filter((p) =>
++    p.tags.includes("featured")
++  ).slice(0, 3),
++  "hidden-homepage-carousel": PRODUCTS.slice(0, 6),
++};
++
++export const MENUS: Record<string, Menu[]> = {
++  "next-js-frontend-header-menu": [
++    { title: "All", path: "/search" },
++    { title: "Apparel", path: "/search/apparel" },
++    { title: "Accessories", path: "/search/accessories" },
++  ],
++  "next-js-frontend-footer-menu": [
++    { title: "About", path: "/about" },
++    { title: "Shipping", path: "/shipping" },
++    { title: "Returns", path: "/returns" },
++  ],
++};
++
++export const PAGES: Page[] = [];
++
++// In-memory cart for stubbed mutations.
++// Not persistent across process restarts — fine for demo.
++const CART_STATE: Cart = {
++  id: "gid://shopify/Cart/stub-cart",
++  checkoutUrl: "https://example.com/checkout",
++  cost: {
++    subtotalAmount: money("0.00"),
++    totalAmount: money("0.00"),
++    totalTaxAmount: money("0.00"),
++  },
++  lines: [],
++  totalQuantity: 0,
++};
++
++function recomputeCartCost() {
++  const subtotal = CART_STATE.lines.reduce(
++    (sum, l) => sum + parseFloat(l.cost.totalAmount.amount),
++    0
++  );
++  CART_STATE.cost.subtotalAmount = money(subtotal.toFixed(2));
++  CART_STATE.cost.totalAmount = money(subtotal.toFixed(2));
++  CART_STATE.totalQuantity = CART_STATE.lines.reduce(
++    (n, l) => n + l.quantity,
++    0
++  );
++}
++
++export function fixtureGetCart(): Cart {
++  return JSON.parse(JSON.stringify(CART_STATE));
++}
++
++export function fixtureAddToCart(
++  lines: { merchandiseId: string; quantity: number }[]
++): Cart {
++  for (const { merchandiseId, quantity } of lines) {
++    const product = PRODUCTS.find((p) =>
++      p.variants.some((v) => v.id === merchandiseId)
++    );
++    const variant = product?.variants.find((v) => v.id === merchandiseId);
++    if (!product || !variant) continue;
++    const unitPrice = parseFloat(variant.price.amount);
++    const line = {
++      id: `line-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
++      quantity,
++      cost: { totalAmount: money((unitPrice * quantity).toFixed(2)) },
++      merchandise: {
++        id: variant.id,
++        title: variant.title,
++        selectedOptions: variant.selectedOptions,
++        product: {
++          id: product.id,
++          handle: product.handle,
++          title: product.title,
++          featuredImage: product.featuredImage,
++        },
++      },
++    };
++    CART_STATE.lines.push(line);
++  }
++  recomputeCartCost();
++  return fixtureGetCart();
++}
++
++export function fixtureRemoveFromCart(lineIds: string[]): Cart {
++  CART_STATE.lines = CART_STATE.lines.filter(
++    (l) => !l.id || !lineIds.includes(l.id)
++  );
++  recomputeCartCost();
++  return fixtureGetCart();
++}
++
++export function fixtureUpdateCart(
++  lines: { id: string; merchandiseId: string; quantity: number }[]
++): Cart {
++  for (const { id, quantity } of lines) {
++    const line = CART_STATE.lines.find((l) => l.id === id);
++    if (!line) continue;
++    const unitAmount =
++      parseFloat(line.cost.totalAmount.amount) / (line.quantity || 1);
++    line.quantity = quantity;
++    line.cost.totalAmount = money((unitAmount * quantity).toFixed(2));
++  }
++  recomputeCartCost();
++  return fixtureGetCart();
++}
++
++export function fixtureCreateCart(): Cart {
++  CART_STATE.lines = [];
++  recomputeCartCost();
++  return fixtureGetCart();
++}

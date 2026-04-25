@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Day 0 artifacts not worth committing
+day0/check2-hook-payload/captures/
+day0/check2-hook-payload/test-workspace/
+day0/check3-pkg-sqlite/bin/
+
+# Demo repo — large, cloned on demand, stubbed separately
+demo-repo/
+
+# contract-ide-demo — separate git repo, not tracked by lahacks
+contract-ide-demo/
+
+# Build output
+target/
+dist/
+.next/
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
