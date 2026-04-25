@@ -1,6 +1,7 @@
 use crate::retrieval::SubstrateHit;
+use std::io::Write;
+use std::process::{Command, Stdio};
 use tauri::AppHandle;
-use tauri_plugin_shell::ShellExt;
 
 /// LLM listwise rerank: top-15 candidates -> top-K (5 default).
 /// One `claude -p --bare` call. Defensive parser tolerates code-fence wrapping +
@@ -12,7 +13,7 @@ use tauri_plugin_shell::ShellExt;
 /// Anti-pattern: NEVER call claude -p without --bare. Without --bare, MCP
 /// discovery + CLAUDE.md + skills add 1-3s latency and non-deterministic context.
 pub async fn llm_rerank(
-    app: &AppHandle,
+    _app: &AppHandle,
     contract_body: &str,
     candidates: &[SubstrateHit],
     top_k: usize,
@@ -65,13 +66,29 @@ Output ONLY a JSON array of indices like [3, 7, 1, 5, 2]. No commentary."#,
         n = candidates.len(),
     );
 
-    let output = app
-        .shell()
-        .command("claude")
-        .args(["-p", &prompt, "--output-format", "json", "--bare"])
-        .output()
-        .await
-        .map_err(|e| format!("rerank claude spawn: {e}"))?;
+    // Pipe prompt via stdin (not -p arg) — see plan_review.rs for the rationale.
+    // Newer Claude CLI versions warn + exit non-zero when stdin is piped open
+    // without data; passing the prompt via stdin gives an explicit EOF.
+    let prompt_owned = prompt;
+    let output = tokio::task::spawn_blocking(move || -> Result<std::process::Output, String> {
+        let mut child = Command::new("claude")
+            .args(["-p", "--output-format", "json", "--bare"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("rerank claude spawn: {e}"))?;
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin
+                .write_all(prompt_owned.as_bytes())
+                .map_err(|e| format!("rerank stdin write: {e}"))?;
+        }
+        child
+            .wait_with_output()
+            .map_err(|e| format!("rerank claude wait: {e}"))
+    })
+    .await
+    .map_err(|e| format!("rerank task join: {e}"))??;
 
     if !output.status.success() {
         // Fallback: original ordering

@@ -27,8 +27,9 @@
 use crate::distiller::{prompt, state::DistillerLocks};
 use sha2::{Digest, Sha256};
 use sqlx::SqlitePool;
+use std::io::Write;
+use std::process::{Command, Stdio};
 use tauri::{AppHandle, Emitter, Listener, Manager};
-use tauri_plugin_shell::ShellExt;
 use tauri_plugin_sql::DbInstances;
 use tokio::time::{timeout, Duration};
 
@@ -94,19 +95,37 @@ pub async fn distill_episode(app: &AppHandle, episode_id: &str) -> Result<usize,
         .replace("{atom_candidates}", &candidates_hint)
         .replace("{filtered_text}", &filtered_text);
 
-    let claude_future = app
-        .shell()
-        .command("claude")
-        .args([
-            "-p",
-            &prompt_text,
-            "--output-format",
-            "json",
-            "--json-schema",
-            &schema.to_string(),
-            "--bare",
-        ])
-        .output();
+    // Pipe prompt via stdin (not -p arg) — see plan_review.rs for the rationale.
+    // Newer Claude CLI versions warn + exit non-zero when stdin is piped open
+    // without data; passing the prompt via stdin gives an explicit EOF.
+    let prompt_owned = prompt_text;
+    let schema_str = schema.to_string();
+    let claude_future = tokio::task::spawn_blocking(
+        move || -> Result<std::process::Output, String> {
+            let mut child = Command::new("claude")
+                .args([
+                    "-p",
+                    "--output-format",
+                    "json",
+                    "--json-schema",
+                    &schema_str,
+                    "--bare",
+                ])
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .map_err(|e| format!("distiller claude spawn: {e}"))?;
+            if let Some(mut stdin) = child.stdin.take() {
+                stdin
+                    .write_all(prompt_owned.as_bytes())
+                    .map_err(|e| format!("distiller stdin write: {e}"))?;
+            }
+            child
+                .wait_with_output()
+                .map_err(|e| format!("distiller claude wait: {e}"))
+        },
+    );
 
     let output = match timeout(Duration::from_secs(60), claude_future).await {
         Err(_) => {
@@ -115,9 +134,13 @@ pub async fn distill_episode(app: &AppHandle, episode_id: &str) -> Result<usize,
         }
         Ok(Err(e)) => {
             write_dead_letter(&pool, episode_id, "claude_exit_nonzero", &e.to_string()).await?;
-            return Err(format!("claude spawn: {e}"));
+            return Err(format!("claude task join: {e}"));
         }
-        Ok(Ok(out)) => out,
+        Ok(Ok(Err(e))) => {
+            write_dead_letter(&pool, episode_id, "claude_exit_nonzero", &e).await?;
+            return Err(e);
+        }
+        Ok(Ok(Ok(out))) => out,
     };
 
     if !output.status.success() {

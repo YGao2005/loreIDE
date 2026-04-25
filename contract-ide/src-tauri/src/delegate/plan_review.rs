@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
+use std::io::Write;
+use std::process::{Command, Stdio};
 use tauri::AppHandle;
-use tauri_plugin_shell::ShellExt;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StructuredPlan {
@@ -22,7 +23,7 @@ pub struct DecisionPreview {
 }
 
 pub async fn run_planning_pass(
-    app: &AppHandle,
+    _app: &AppHandle,
     assembled_prompt: &str,
 ) -> Result<StructuredPlan, String> {
     let planning_directive = r#"PLANNING-ONLY MODE. You will produce a STRUCTURED PLAN, not code.
@@ -62,23 +63,44 @@ Output ONLY a JSON object matching the schema. No commentary, no code, no edits.
         "required": ["target_files", "substrate_rules", "decisions_preview"]
     });
 
-    let output = app
-        .shell()
-        .command("claude")
-        .args([
-            "-p",
-            assembled_prompt,
-            "--append-system-prompt",
-            planning_directive,
-            "--output-format",
-            "json",
-            "--json-schema",
-            &schema.to_string(),
-            "--bare",
-        ])
-        .output()
-        .await
-        .map_err(|e| format!("planning claude spawn: {e}"))?;
+    // Pipe prompt via stdin (not -p arg) to avoid macOS argv size limits AND to give
+    // claude an explicit EOF on stdin — `claude -p` (no arg) reads from stdin and
+    // returns when stdin closes. Using -p with a positional argument leaves stdin
+    // piped-but-empty, which trips the "no stdin data received in 3s" warning and
+    // a non-zero exit on newer Claude CLI versions.
+    let prompt_owned = assembled_prompt.to_string();
+    let schema_str = schema.to_string();
+    let directive_owned = planning_directive.to_string();
+
+    let output = tokio::task::spawn_blocking(move || -> Result<std::process::Output, String> {
+        let mut child = Command::new("claude")
+            .args([
+                "-p",
+                "--append-system-prompt",
+                &directive_owned,
+                "--output-format",
+                "json",
+                "--json-schema",
+                &schema_str,
+                "--bare",
+            ])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("planning claude spawn: {e}"))?;
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin
+                .write_all(prompt_owned.as_bytes())
+                .map_err(|e| format!("planning stdin write: {e}"))?;
+            // Drop closes stdin → claude sees EOF and proceeds.
+        }
+        child
+            .wait_with_output()
+            .map_err(|e| format!("planning claude wait: {e}"))
+    })
+    .await
+    .map_err(|e| format!("planning task join: {e}"))??;
 
     if !output.status.success() {
         return Err(format!(
