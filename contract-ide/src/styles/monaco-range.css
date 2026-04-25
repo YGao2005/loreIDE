@@ -1,0 +1,27 @@
+/* Plan 04-01: dim fringe for Monaco Code tab context lines.
+ *
+ * Monaco line decorations inject a className at a line's DOM level; the
+ * target selector must be globally available — scoped CSS modules would
+ * never match the injected classname. Keep these rules in index.css's
+ * cascade (imported BEFORE the `@import "tailwindcss";` line in
+ * index.css because @tailwindcss/vite silently drops any `@import`
+ * that appears after the tailwindcss directive).
+ *
+ * Task 3b consumes .monaco-expand-handle — defined here up-front to keep
+ * CSS churn to a single file edit.
+ */
+.monaco-context-dim {
+  opacity: 0.35;
+}
+
+.monaco-expand-handle {
+  cursor: pointer;
+  padding: 2px 8px;
+  font-size: 11px;
+  color: rgb(var(--muted-foreground));
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
