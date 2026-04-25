@@ -201,8 +201,8 @@ Contract IDE ships in one milestone — 13 phases, executed in dependency order,
 - [x] 09-04-PLAN.md — contract-ide-demo Next.js scaffold + Prisma/Stripe/Mailchimp adapters + DangerActionButton + 24+ seeded contracts (4 scenario + 20 ambient) **with JSX-aligned `code_ranges` on all UI L4 atoms + populated backend frontmatter sections (`## Inputs`/`## Outputs`/`## Side effects`) on all backend participant contracts** [DEMO-01, JSX-01, BACKEND-FM-01]
 - [x] 09-04b-PLAN.md — **NEW (added 2026-04-24).** Babel/SWC plugin for `data-contract-uuid` injection in demo repo + JSX-alignment validator at IDE startup + Day-1 click-resolution spike (PM clicks empty Danger Zone in iframe → correct UUID resolved → inspector opens; if spike fails, fallback to bounding-rect chip-overlay) [BABEL-01, JSX-01]
 - [x] 09-04c-PLAN.md — **NEW (added 2026-04-24).** Flow contracts (`kind: flow` + `members` ordering) seeded for delete-account, delete-workspace, ~4 ambient flows + flow-frontmatter parser + `members`-driven vertical-chain layout primitives (used by Phase 13) + format_version increment (or fold into Phase 8 PROP-01 v3 migration) [FLOW-01]
-- [ ] 09-05-PLAN.md — Reset fixture (substrate.sqlite.seed with 5 rules + parent constraint + priority shift **+ flow contracts**) + reset-demo.sh + bare-Claude baselines [DEMO-02, DEMO-03]
-- [ ] 09-06-PLAN.md — Source-session JSONL (4-thread Feb-2026 narrative) + jq validation + Phase 9 end-to-end UAT covering all 8 success criteria [DEMO-02]
+- [x] 09-05-PLAN.md — Reset fixture (substrate.sqlite.seed with 5 rules + parent constraint + priority shift **+ flow contracts**) + reset-demo.sh + bare-Claude baselines [DEMO-02, DEMO-03]
+- [x] 09-06-PLAN.md — Source-session JSONL (40-turn deletion-incident, 4-thread Feb-2026 narrative) + jq validation + Phase 9 end-to-end UAT (9 tests covering all 10 requirements) [DEMO-02]; **UAT execution (09-UAT.md, 3 runs over ≥2 days) is the standing Phase 9 closure gate**
 
 ### Phase 10: Session Watcher + Filter Pipeline
 **Goal**: An ambient watcher ingests Claude Code JSONL sessions, filters to conversational content, and chunks into episodes ready for distillation

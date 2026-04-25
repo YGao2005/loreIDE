@@ -5,7 +5,7 @@
 See: .planning/PROJECT.md (updated 2026-04-24)
 
 **Core value:** A developer or PM can locate any piece of the product by intent, edit its contract, and have the agent produce the corresponding code change — without touching the file tree.
-**Current focus:** Phase 11 Plans 01–03 complete (2026-04-25): substrate schema migration + distiller pipeline + 3 MCP tools + contract-anchored retrieval (lineage scope + cousin-exclusion FTS5 + LLM rerank) all shipped. SUB-03 + SUB-04 requirements closed. Plan 11-04 (Delegate button) and Plan 11-05 (Substrate panel + UAT) outstanding — both have human-verify checkpoints.
+**Current focus:** Phase 9 code-shipped complete (2026-04-25): all 10 requirements (MASS-01/02, NONC-01, DEMO-01/02/03, BABEL-01, JSX-01, FLOW-01, BACKEND-FM-01) shipped across 09-01 through 09-06. UAT execution (09-UAT.md, 9 tests, 3 runs) is the standing post-execution gate for Phase 9 formal closure. Phase 11 Plans 01–03 also complete (2026-04-25): substrate schema migration + distiller pipeline + 3 MCP tools + contract-anchored retrieval (lineage scope + cousin-exclusion FTS5 + LLM rerank) all shipped. SUB-03 + SUB-04 requirements closed. Plan 11-04 (Delegate button) and Plan 11-05 (Substrate panel + UAT) outstanding — both have human-verify checkpoints.
 
 ## Current Position
 
@@ -17,7 +17,7 @@ Status: Phase 11 Plans 01–03 COMPLETE (2026-04-25).
 - Plan 11-03: contract-anchored retrieval — lineage scope walker (recursive CTE, cousins excluded structurally) + candidate_selection (FTS5 + json_each(anchored_uuids) JOIN + RRF k=60 + zero-hit fallback) + LLM rerank (claude -p --bare listwise top-15→top-5 + 3-level defensive parser) + private find_substrate_for_atom Tauri command + 5 unit tests (lineage walker, cousin-exclusion JOIN, RRF, defensive parser, L0 edge case). SUB-04 closed. Commits a367d38, 2bfb7f5, b79ca51, c9f5e31.
 Last activity: 2026-04-25 — Wave 2 complete. Wave 3 (Plan 11-04 Delegate button) up next; has human-verify checkpoint for Beat 1 demo flow.
 
-Progress: [█████████░] 87% (7/13 phases complete + Phase 10 4/4 — Phases 1, 2, 3, 5, 6, 7, 10 complete; Phase 4 partially landed; Phase 8 implementation done pending UAT; Phase 9 in progress 6/8 — 09-01, 09-02, 09-03, 09-04, 09-04b, 09-04c done; 09-05 + 09-06 outstanding)
+Progress: [█████████░] 88% (7/13 phases complete + Phase 10 4/4 — Phases 1, 2, 3, 5, 6, 7, 10 complete; Phase 4 partially landed; Phase 8 implementation done pending UAT; Phase 9 code-shipped 8/8 plans — 09-01, 09-02, 09-03, 09-04, 09-04b, 09-04c, 09-05, 09-06 all done; UAT execution (09-UAT.md) is the Phase 9 closure gate)
 
 ## Performance Metrics
 
@@ -75,6 +75,7 @@ Progress: [█████████░] 87% (7/13 phases complete + Phase 10 
 | Phase 11 P03 | 13 | 3 tasks | 9 files |
 | Phase 11 P04 | 30 | 3 tasks | 18 files |
 | Phase 09-mass-edit-non-coder-mode-demo-repo-seeding P05 | 8 | 2 tasks | 9 files |
+| Phase 09-mass-edit-non-coder-mode-demo-repo-seeding P06 | 25 | 2 tasks (T4 deferred) | 4 files |
 
 ## Accumulated Context
 
@@ -308,5 +309,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-04-25
-Stopped at: Phase 9 Wave 2 complete — 09-02 (mass-edit modal UI) + 09-04b (Babel plugin spike PASS + JSX-01 + BACKEND-FM-01 validators wired into open_repo) + 09-04c (FLOW-01 schema + 6 seeded flow contracts + migration v5) all landed. demo-base tag advanced to 9f5029b (post-09-04c flow contracts). 09-04b's executor agent suffered two stream-idle timeouts; orchestrator finished Tasks 2-4 directly with full test coverage and clean commits. Wave 3 (09-05 — substrate seed + bare-Claude baselines, autonomous: false) and Wave 4 (09-06 — source-session JSONL + UAT, autonomous: false) outstanding.
+Stopped at: Completed 09-06-PLAN.md — Phase 9 code-shipped complete. All 10 requirements (MASS-01/02, NONC-01, DEMO-01/02/03, BABEL-01, JSX-01, FLOW-01, BACKEND-FM-01) shipped across 09-01 through 09-06. Source-session JSONL (40-turn deletion-incident synthetic session) + 09-UAT.md (9 tests, 3-run rehearsal log) authored and committed. Task 4 (UAT execution) deferred as standing post-execution gate. Phase 11 Plans 11-01 through 11-04 also complete; Plan 11-05 (Substrate panel + UAT) outstanding.
 Resume file: 09-05-PLAN.md (Wave 3). Phase 9 progress: 6/8 plans complete. Phase 11 (Distiller + Retrieval) work has been progressing in parallel — Plans 11-01, 11-02, 11-03 commits visible (managed elsewhere). `/gsd:execute-phase 9` resumes from 09-05 if re-invoked.
