@@ -75,6 +75,13 @@ Output ONLY a JSON array of indices like [3, 7, 1, 5, 2]. No commentary."#,
                 "-p",
                 "--output-format",
                 "json",
+                // Pin haiku + low effort — rerank just orders a 15-item list,
+                // doesn't need opus thinking. Without the pin, default routing
+                // may pick opus + medium thinking and add 15-30s of inference.
+                "--model",
+                "haiku",
+                "--effort",
+                "low",
                 "--strict-mcp-config",
                 "--mcp-config",
                 r#"{"mcpServers":{}}"#,

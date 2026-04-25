@@ -87,6 +87,13 @@ Output ONLY a JSON object matching the schema. No commentary, no code, no edits.
                 "json",
                 "--json-schema",
                 &schema_str,
+                // Pin a fast model + low effort. Default routing may pick opus +
+                // medium thinking, which adds 20-40s of inference for a structured
+                // JSON output that doesn't need it.
+                "--model",
+                "sonnet",
+                "--effort",
+                "low",
                 "--strict-mcp-config",
                 "--mcp-config",
                 r#"{"mcpServers":{}}"#,
@@ -108,9 +115,12 @@ Output ONLY a JSON object matching the schema. No commentary, no code, no edits.
             .map_err(|e| format!("planning claude wait: {e}"))
     });
 
-    // 45s hard timeout — fail fast if claude hangs (vs the previous unbounded wait).
-    let output = match tokio::time::timeout(std::time::Duration::from_secs(45), output_future).await {
-        Err(_) => return Err("planning claude timed out after 45s".into()),
+    // 90s hard timeout. Lean MCP flags don't skip CLAUDE.md auto-discovery,
+    // hooks, LSP init, or attribution lookups (--bare is the only flag that
+    // does, and it requires ANTHROPIC_API_KEY). For OAuth-keychain auth we
+    // budget headroom for those.
+    let output = match tokio::time::timeout(std::time::Duration::from_secs(90), output_future).await {
+        Err(_) => return Err("planning claude timed out after 90s".into()),
         Ok(Err(e)) => return Err(format!("planning task join: {e}")),
         Ok(Ok(Err(e))) => return Err(e),
         Ok(Ok(Ok(out))) => out,
