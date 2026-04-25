@@ -6,8 +6,12 @@
 //! `.await`. Satisfies clippy `await_holding_lock`.
 
 use crate::supersession::fact_engine::invalidate_contradicted;
+use crate::supersession::intent_engine::{
+    preview_intent_drift_impact, propagate_intent_drift, record_priority_shift_internal,
+    ImpactPreview,
+};
 use crate::supersession::queries::{fetch_current_substrate_nodes, fetch_substrate_history};
-use crate::supersession::types::SubstrateNode;
+use crate::supersession::types::{IntentDriftResult, SubstrateNode};
 use sqlx::SqlitePool;
 use tauri::Manager;
 use tauri_plugin_sql::DbInstances;
@@ -62,4 +66,52 @@ pub async fn current_truth_query_cmd(
     fetch_current_substrate_nodes(&pool, node_type.as_deref(), lim)
         .await
         .map_err(|e| format!("current_truth_query: {e}"))
+}
+
+// ----------- 12-03 intent-engine commands -----------
+
+/// Record a priority shift. Frontend calls this when a user's L0 contract edit
+/// is explicit-y declared as a priority shift (NOT auto-fired by every L0 edit
+/// — RESEARCH.md Pitfall 3). Returns the new shift id.
+#[tauri::command]
+pub async fn record_priority_shift(
+    app: tauri::AppHandle,
+    old_l0_uuid: String,
+    new_l0_uuid: String,
+    valid_at: String,
+    summary_of_old: String,
+    summary_of_new: String,
+) -> Result<String, String> {
+    let pool = pool_clone(&app).await?;
+    record_priority_shift_internal(
+        &pool,
+        &old_l0_uuid,
+        &new_l0_uuid,
+        &valid_at,
+        &summary_of_old,
+        &summary_of_new,
+    )
+    .await
+}
+
+/// DRY-RUN preview before full apply. Surfaces "N nodes will flip" gate.
+#[tauri::command]
+pub async fn preview_intent_drift_impact_cmd(
+    app: tauri::AppHandle,
+    priority_shift_id: String,
+) -> Result<ImpactPreview, String> {
+    let pool = pool_clone(&app).await?;
+    preview_intent_drift_impact(&app, &pool, &priority_shift_id).await
+}
+
+/// Apply intent-drift judgment to ALL descendants. Marks shift applied on success.
+/// Caller (frontend) should always run preview_intent_drift_impact_cmd FIRST and
+/// confirm with the user before invoking this.
+#[tauri::command]
+pub async fn propagate_intent_drift_cmd(
+    app: tauri::AppHandle,
+    priority_shift_id: String,
+) -> Result<IntentDriftResult, String> {
+    let pool = pool_clone(&app).await?;
+    propagate_intent_drift(&app, &pool, &priority_shift_id).await
 }

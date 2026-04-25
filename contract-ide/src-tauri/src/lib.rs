@@ -87,6 +87,9 @@ pub fn run() {
             commands::supersession::ingest_substrate_node_with_invalidation,
             commands::supersession::find_substrate_history_cmd,
             commands::supersession::current_truth_query_cmd,
+            commands::supersession::record_priority_shift,
+            commands::supersession::preview_intent_drift_impact_cmd,
+            commands::supersession::propagate_intent_drift_cmd,
         ])
         .setup(|app| {
             let window = app
