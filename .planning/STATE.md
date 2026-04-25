@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-04-24)
 ## Current Position
 
 Phase: 12 of 13 (Conflict / Supersession Engine) — IN PROGRESS
-Plan: 1 of 4 complete in current phase
-Status: Phase 12 Plan 01 COMPLETE (2026-04-25). Foundation landed: migration v7 (phase12_supersession_layer) — adds intent_drift_* columns to substrate_nodes via ALTER TABLE + creates priority_shifts and intent_drift_verdicts tables with CHECK constraints + composite edge-type lookup index. supersession::types module exports Verdict (3-value enum: Drifted/NotDrifted/NeedsHumanReview), ParsedVerdict, SubstrateNode (sqlx::FromRow), DescendantNode, IntentDriftResult — the shared types every 12-02/03/04 plan imports. REQUIREMENTS.md gained canonical SUB-06 + SUB-07 entries under new "Conflict / Supersession Engine (Phase 12)" subsection (transcribed from 12-RESEARCH.md, no invention). Commits 59fbb4b, 0a92a68. 71/71 tests pass; clippy clean.
-Last activity: 2026-04-25 — Phase 12 Wave 1 (foundation) complete. Wave 2 next: 12-02 (fact engine) + 12-03 (intent engine) can run in parallel atop this schema.
+Plan: 2 of 4 complete in current phase
+Status: Phase 12 Plan 02 COMPLETE (2026-04-25). Fact-level supersession engine landed: invalidate_contradicted (Graphiti port) + 3 Tauri IPC commands (ingest_substrate_node_with_invalidation / find_substrate_history_cmd / current_truth_query_cmd) + 5 supersession submodules (candidate_selection FTS5 top-K=10, prompt with verbatim Graphiti dedupe-edges template + INTENT_DRIFT_SYSTEM_PROMPT for 12-03 reuse, defensive verdict parsers, queries SQL helpers, fact_engine orchestrator). DriftLocks (Phase 7) reused — no parallel mutex map. Migration v8 SKIPPED — Phase 11 v6 already ships substrate_nodes_fts virtual table + AI/AU/AD triggers with the exact shape needed. Commits 3fb62eb, 9ed628c. 92/92 tests pass; clippy clean. SUB-06 fact-engine half closed.
+Last activity: 2026-04-25 — Phase 12 Wave 2 partial: 12-02 fact engine done. 12-03 intent engine next (still parallelizable; reads same supersession::prompt module).
 
-Progress: [█████████░] 89% (7/13 phases complete + Phase 10 4/4 + Phase 11 Wave 2 complete + Phase 12 1/4 — Phases 1, 2, 3, 5, 6, 7, 10 complete; Phase 4 partially landed; Phase 8 implementation done pending UAT; Phase 9 code-shipped 8/8 plans; Phase 11 Plans 01–04 complete (11-05 outstanding); Phase 12 Plan 01 (foundation) complete; UAT execution (09-UAT.md) is the Phase 9 closure gate)
+Progress: [██████████] 92% (7/13 phases complete + Phase 10 4/4 + Phase 11 Wave 2 complete + Phase 12 2/4 — Phases 1, 2, 3, 5, 6, 7, 10 complete; Phase 4 partially landed; Phase 8 implementation done pending UAT; Phase 9 code-shipped 8/8 plans; Phase 11 Plans 01–04 complete (11-05 outstanding); Phase 12 Plans 01–02 complete; UAT execution (09-UAT.md) is the Phase 9 closure gate)
 
 ## Performance Metrics
 
@@ -74,7 +74,9 @@ Progress: [█████████░] 89% (7/13 phases complete + Phase 10 
 | Phase 09-mass-edit-non-coder-mode-demo-repo-seeding P05 | 8 | 2 tasks | 9 files |
 | Phase 09-mass-edit-non-coder-mode-demo-repo-seeding P06 | 25 | 2 tasks (T4 deferred) | 4 files |
 | Phase 12-conflict-supersession-engine P01 | 5min | 2 tasks | 5 files |
+| Phase 12-conflict-supersession-engine P02 | 7min | 2 tasks | 9 files |
 | Phase 11-distiller-constraint-store-contract-anchored-retrieval P05 | 5 | 2 tasks | 9 files |
+| Phase 12-conflict-supersession-engine P02 | 7min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -284,6 +286,9 @@ Recent decisions affecting current work:
 - [Phase 12-01]: Composite edge index suffixed _lookup to avoid collision with Phase 11 v6's idx_substrate_edges_type
 - [Phase 12-01]: REQUIREMENTS.md count stays at 70 — SUB-06/07 stubs were already counted; collapsing into canonical entries is net-zero
 - [Phase 11]: Side panel uses separate list_substrate_for_atom (FTS5-only, no LLM rerank) vs find_substrate_for_atom (LLM rerank)
+- [Phase 12-conflict-supersession-engine]: Plan 12-02: SKIP Migration v8 — Phase 11 v6 already ships substrate_nodes_fts virtual table + AI/AU/AD triggers with exact (uuid UNINDEXED, text, applies_when, scope) shape. Adding redundant migration would risk trigger-name collision (Phase 11 names differ from plan-proposed names). Cleaner to read directly from Phase 11's table.
+- [Phase 12-conflict-supersession-engine]: Plan 12-02: Lock ordering for fact_engine — new_uuid first (held for full call) + each stale_uuid in turn during invalidation loop. Cross-engine deadlock-safe because intent_engine (12-03) holds at most one lock at a time. DriftLocks (Phase 7) reused — no parallel mutex map.
+- [Phase 12-conflict-supersession-engine]: Plan 12-02: claude -p uses --output-format text (not --json-schema) for invalidation verdict — Graphiti dedupe-edges prompt instructs LLM to output JSON object literal in text response; defensive parser strips markdown fences and treats parse failure as fail-safe (Ok(vec![]) = no contradictions found). Differs from distiller pipeline which uses --json-schema.
 
 ### Pending Todos
 
