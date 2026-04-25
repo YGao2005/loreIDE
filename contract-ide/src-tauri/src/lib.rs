@@ -84,6 +84,9 @@ pub fn run() {
             commands::delegate::ensure_decisions_manifest,
             commands::substrate_panel::list_substrate_for_atom,
             commands::substrate_panel::get_total_substrate_count,
+            commands::supersession::ingest_substrate_node_with_invalidation,
+            commands::supersession::find_substrate_history_cmd,
+            commands::supersession::current_truth_query_cmd,
         ])
         .setup(|app| {
             let window = app
