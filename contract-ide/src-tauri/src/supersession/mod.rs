@@ -9,8 +9,12 @@
 //!
 //! See `.planning/phases/12-conflict-supersession-engine/12-RESEARCH.md`.
 
+pub mod candidate_selection;
+pub mod fact_engine;
+pub mod prompt;
+pub mod queries;
 pub mod types;
+pub mod verdict;
 
-// 12-02 lands fact_engine, candidate_selection, prompt, verdict.
-// 12-03 lands intent_engine, queries.
+// 12-03 lands intent_engine.
 // 12-04 lands tests/, demo_force_intent_drift IPC, demo-fixture cfg.
