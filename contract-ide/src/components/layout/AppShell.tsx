@@ -24,6 +24,7 @@ import { Inspector } from './Inspector';
 import { RightPanel, type RightPanelTab } from './RightPanel';
 import { McpStatusIndicator } from './McpStatusIndicator';
 import { SessionStatusIndicator } from './SessionStatusIndicator';
+import { SubstrateStatusIndicator } from './SubstrateStatusIndicator';
 import { BackfillModal } from '@/components/session';
 import { CommandPalette } from '@/components/command-palette/CommandPalette';
 import { MassEditTrigger } from '@/components/mass-edit/MassEditTrigger';
@@ -32,19 +33,17 @@ import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 /**
  * IDE shell layout.
  *
- *   horizontal: [ LeftCol | RightPanel (Chat / Receipts) ]
- *   LeftCol is vertical:    [ TopRow ]
+ *   horizontal: [ Sidebar | Center | RightPanel (Chat / Receipts) ]
+ *   Center is vertical:     [ Graph ]
  *                           [ Inspector (Contract / Code / Preview, collapsible) ]
- *   TopRow is horizontal:   [ Sidebar | Graph ]
  *
- * RightPanel runs full window height (intuitive AI surface, mirrors VS Code /
- * Cursor). Inspector lives at the bottom and spans Sidebar + Graph width so
- * Code/Contract editors get max horizontal real-estate.
+ * Sidebar and RightPanel both run full window height. Inspector sits at the
+ * bottom of the Center column only — it does not span under the Sidebar
+ * (keeps the bottom strip visually balanced).
  *
  * Layout proportions tuned for 1400×900:
- *   LeftCol 72% · RightPanel 28%
- *   inside LeftCol: TopRow 70% · Inspector 30%
- *   inside TopRow:  Sidebar 25% · Graph 75% (≈ 18% / 54% of full width)
+ *   Sidebar 18% · Center 54% · RightPanel 28%
+ *   inside Center: Graph 70% · Inspector 30%
  *
  * Sidebar is intentionally background-less so whole-window vibrancy from
  * Plan 01-01's `apply_vibrancy` shows through. The graph, inspector, and
@@ -303,6 +302,50 @@ export function AppShell() {
     };
   }, []);
 
+  // Phase 11 Plan 05: first-time toast when the very first substrate node lands.
+  // useSubstrateStore fires 'substrate:first-node-toast' CustomEvent on the first
+  // 0→≥1 transition; AppShell catches it and shows a one-time inline DOM toast.
+  // This is the same inline DOM toast pattern established in Plan 11-04 (no toast
+  // library dependency). The toast never fires again — localStorage flag persists.
+  useEffect(() => {
+    const handler = () => {
+      const el = document.createElement('div');
+      el.innerHTML = [
+        '<span style="font-weight:600">Your team\'s reasons started capturing.</span>',
+        '<br>',
+        '<span style="opacity:0.7;font-size:10px">We\'re distilling typed substrate from your Claude Code sessions.</span>',
+      ].join('');
+      el.style.cssText = [
+        'position:fixed',
+        'bottom:3rem',
+        'left:50%',
+        'transform:translateX(-50%)',
+        'background:var(--background,#1a1a1a)',
+        'color:var(--foreground,#fff)',
+        'border:1px solid var(--border,#444)',
+        'border-radius:8px',
+        'padding:10px 16px',
+        'font-size:11px',
+        'font-family:var(--font-geist-sans,sans-serif)',
+        'z-index:9999',
+        'pointer-events:none',
+        'opacity:1',
+        'transition:opacity 0.4s ease',
+        'max-width:320px',
+        'text-align:center',
+        'line-height:1.5',
+      ].join(';');
+      document.body.appendChild(el);
+      setTimeout(() => {
+        el.style.opacity = '0';
+        setTimeout(() => el.remove(), 450);
+      }, 6000);
+    };
+
+    window.addEventListener('substrate:first-node-toast', handler);
+    return () => window.removeEventListener('substrate:first-node-toast', handler);
+  }, []);
+
   const rightPanelRef = usePanelRef();
   const [rightTab, setRightTab] = useState<RightPanelTab>('Chat');
 
@@ -330,21 +373,18 @@ export function AppShell() {
           orientation="horizontal"
           className="!h-[calc(100vh-1.75rem)]"
         >
-          {/* Left column: Sidebar+Graph on top, Inspector on bottom (spanning both). */}
-          <ResizablePanel defaultSize="72%" minSize="50%">
+          {/* Left: Sidebar (full height). */}
+          <ResizablePanel defaultSize="18%" minSize="15%" maxSize="30%">
+            <Sidebar />
+          </ResizablePanel>
+
+          <ResizableHandle />
+
+          {/* Center: Graph on top, Inspector on bottom (collapsible, center-only). */}
+          <ResizablePanel defaultSize="54%" minSize="35%">
             <ResizablePanelGroup orientation="vertical">
               <ResizablePanel defaultSize="70%" minSize="30%">
-                <ResizablePanelGroup orientation="horizontal">
-                  <ResizablePanel defaultSize="25%" minSize="18%" maxSize="40%">
-                    <Sidebar />
-                  </ResizablePanel>
-
-                  <ResizableHandle />
-
-                  <ResizablePanel defaultSize="75%" minSize="40%">
-                    <GraphPlaceholder />
-                  </ResizablePanel>
-                </ResizablePanelGroup>
+                <GraphPlaceholder />
               </ResizablePanel>
 
               <ResizableHandle />
@@ -362,7 +402,7 @@ export function AppShell() {
 
           <ResizableHandle />
 
-          {/* Right column: full-height Chat / Receipts surface. */}
+          {/* Right: full-height Chat / Receipts surface. */}
           <ResizablePanel
             panelRef={rightPanelRef}
             defaultSize="28%"
@@ -394,12 +434,15 @@ export function AppShell() {
             opt-in: nothing ingests without explicit user confirmation. */}
         <BackfillModal />
 
-        {/* Status bar footer — MCP health (Plan 05-01) + Session watcher (Plan 10-04).
-            Sits outside the panel group so it is never resized away. */}
+        {/* Status bar footer — MCP health (Plan 05-01) + Session watcher (Plan 10-04)
+            + Substrate counter (Plan 11-05). Sits outside the panel group so it is
+            never resized away. */}
         <footer className="fixed bottom-0 right-0 z-10 flex items-center gap-2 border-l border-t border-border/40 bg-background/80 backdrop-blur-sm">
           <McpStatusIndicator />
           <span className="h-3 w-px bg-border/60" aria-hidden />
           <SessionStatusIndicator />
+          <span className="h-3 w-px bg-border/60" aria-hidden />
+          <SubstrateStatusIndicator />
         </footer>
       </div>
     </ReactFlowProvider>
