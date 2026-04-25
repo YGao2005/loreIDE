@@ -103,14 +103,29 @@ Output ONLY a JSON object matching the schema. No commentary, no code, no edits.
     .map_err(|e| format!("planning task join: {e}"))??;
 
     if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stdout_snip: String = stdout.chars().take(500).collect();
         return Err(format!(
-            "planning claude exit non-zero: {}",
-            String::from_utf8_lossy(&output.stderr)
+            "planning claude exit code {}: stderr={:?} stdout_head={:?}",
+            output.status.code().unwrap_or(-1),
+            stderr.trim(),
+            stdout_snip,
         ));
     }
 
+    // claude -p with --output-format json may signal API errors via is_error=true
+    // INSIDE the JSON body even when exit code is 0. Surface that explicitly so the
+    // user gets the underlying message instead of a downstream schema parse failure.
     let response: serde_json::Value = serde_json::from_slice(&output.stdout)
         .map_err(|e| format!("response parse: {e}"))?;
+    if response.get("is_error").and_then(|v| v.as_bool()) == Some(true) {
+        let msg = response
+            .get("result")
+            .and_then(|v| v.as_str())
+            .unwrap_or("(no result message)");
+        return Err(format!("planning claude API error: {msg}"));
+    }
 
     // Try structured_output field first (json output format with schema)
     let structured = response
