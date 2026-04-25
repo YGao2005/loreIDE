@@ -74,6 +74,7 @@ Progress: [█████████░] 89% (7/13 phases complete + Phase 10 
 | Phase 09-mass-edit-non-coder-mode-demo-repo-seeding P05 | 8 | 2 tasks | 9 files |
 | Phase 09-mass-edit-non-coder-mode-demo-repo-seeding P06 | 25 | 2 tasks (T4 deferred) | 4 files |
 | Phase 12-conflict-supersession-engine P01 | 5min | 2 tasks | 5 files |
+| Phase 11-distiller-constraint-store-contract-anchored-retrieval P05 | 5 | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -282,6 +283,7 @@ Recent decisions affecting current work:
 - [Phase 12-01]: Verdict enum SCREAMING_SNAKE_CASE serde rename matches the SQLite CHECK constraint string verbatim — single canonical string at every boundary
 - [Phase 12-01]: Composite edge index suffixed _lookup to avoid collision with Phase 11 v6's idx_substrate_edges_type
 - [Phase 12-01]: REQUIREMENTS.md count stays at 70 — SUB-06/07 stubs were already counted; collapsing into canonical entries is net-zero
+- [Phase 11]: Side panel uses separate list_substrate_for_atom (FTS5-only, no LLM rerank) vs find_substrate_for_atom (LLM rerank)
 
 ### Pending Todos
 
