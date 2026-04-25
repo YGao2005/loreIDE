@@ -10,6 +10,7 @@
 import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { getDb } from '../db.js';
+import { buildFtsQuery } from '../lib/fts_query.js';
 
 const inputSchema = z.object({
   intent: z.string().min(1, 'intent must be non-empty'),
@@ -32,6 +33,13 @@ export async function findConstraintsForGoal(args: z.infer<typeof inputSchema>) 
   const { intent, limit } = inputSchema.parse(args);
   const db = getDb();
 
+  const ftsExpr = buildFtsQuery(intent);
+  if (ftsExpr.length === 0) {
+    return {
+      content: [{ type: 'text' as const, text: `No constraints found matching: ${intent}` }],
+    };
+  }
+
   const rows = db
     .prepare(
       `
@@ -46,7 +54,7 @@ export async function findConstraintsForGoal(args: z.infer<typeof inputSchema>) 
       LIMIT ?
       `,
     )
-    .all(intent, limit) as SubstrateRow[];
+    .all(ftsExpr, limit) as SubstrateRow[];
 
   if (rows.length === 0) {
     return {

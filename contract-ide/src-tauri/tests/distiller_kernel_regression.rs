@@ -89,24 +89,39 @@ async fn distiller_reproduces_14_kernel_constraints() {
 
         let schema = substrate_node_schema();
 
-        // 3. Invoke claude -p directly (std::process::Command — no AppHandle needed)
-        let output = std::process::Command::new("claude")
+        // 3. Invoke claude -p — pipe prompt via stdin (avoids argv size limits +
+        // gives EOF signal for newer claude CLI). --bare dropped for OAuth-keychain
+        // auth path (same trade-off as production callsites; see plan_review.rs).
+        use std::io::Write;
+        use std::process::Stdio;
+        let mut child = std::process::Command::new("claude")
             .args([
                 "-p",
-                &prompt_text,
                 "--output-format",
                 "json",
                 "--json-schema",
                 &schema.to_string(),
-                "--bare",
             ])
-            .output()
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
             .expect("failed to spawn `claude` — is it installed and on PATH?");
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin
+                .write_all(prompt_text.as_bytes())
+                .expect("failed to write prompt to claude stdin");
+        }
+        let output = child
+            .wait_with_output()
+            .expect("failed to wait on claude subprocess");
 
         assert!(
             output.status.success(),
-            "claude -p exited non-zero for session {session_id}: {}",
-            String::from_utf8_lossy(&output.stderr)
+            "claude -p exited non-zero for session {session_id}: code={} stderr={:?} stdout_head={:?}",
+            output.status.code().unwrap_or(-1),
+            String::from_utf8_lossy(&output.stderr),
+            String::from_utf8_lossy(&output.stdout).chars().take(400).collect::<String>()
         );
 
         // 4. Parse response and extract constraint nodes

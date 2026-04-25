@@ -9,6 +9,7 @@
 import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { getDb } from '../db.js';
+import { buildFtsQuery } from '../lib/fts_query.js';
 
 const inputSchema = z.object({
   subject: z.string().min(1, 'subject must be non-empty'),
@@ -31,6 +32,13 @@ export async function findDecisionsAbout(args: z.infer<typeof inputSchema>) {
   const { subject, limit } = inputSchema.parse(args);
   const db = getDb();
 
+  const ftsExpr = buildFtsQuery(subject);
+  if (ftsExpr.length === 0) {
+    return {
+      content: [{ type: 'text' as const, text: `No decisions found matching: ${subject}` }],
+    };
+  }
+
   const rows = db
     .prepare(
       `
@@ -45,7 +53,7 @@ export async function findDecisionsAbout(args: z.infer<typeof inputSchema>) {
       LIMIT ?
       `,
     )
-    .all(subject, limit) as SubstrateRow[];
+    .all(ftsExpr, limit) as SubstrateRow[];
 
   if (rows.length === 0) {
     return {
