@@ -74,3 +74,50 @@ export async function getSubstrateNodeDetail(
 ): Promise<SubstrateNodeSummary | null> {
   return invoke<SubstrateNodeSummary | null>('get_substrate_node_detail', { uuid });
 }
+
+/**
+ * Phase 13 Plan 03 — Cmd+P semantic intent palette wire shape (SUB-08).
+ *
+ * Unified result envelope merging contract FTS5 hits (nodes_fts) and substrate
+ * hits (substrate_nodes_fts + LIKE fallback). Mirrors `IntentSearchHit` in
+ * `src-tauri/src/commands/substrate.rs`.
+ *
+ * Field semantics:
+ *   - `kind`: `'flow' | 'contract' | 'constraint' | 'decision' |
+ *     'open_question' | 'resolved_question' | 'attempt'`. Drives the navigation
+ *     branch in IntentPalette's `handleSelect`.
+ *   - `level`: L0..L4 for contract hits; null for substrate node hits.
+ *   - `state`: substrate visual state ('fresh' | 'intent_drifted' | 'superseded')
+ *     for substrate hits; null for contracts.
+ *   - `parent_uuid`: contract hit → contract.parent_uuid (used for L4
+ *     atom-hit landing); substrate hit → first anchored uuid (atom the
+ *     substrate node speaks to).
+ *   - `score`: positive number, higher = better. Contracts get BM25-derived
+ *     scores; substrate hits get a flat 0.5 so contracts dominate the top.
+ */
+export interface IntentSearchHit {
+  uuid: string;
+  kind: string;
+  level: string | null;
+  name: string;
+  summary: string;
+  state: string | null;
+  parent_uuid: string | null;
+  score: number;
+}
+
+/**
+ * Cmd+P palette retrieval (SUB-08).
+ *
+ * Aggregates contract FTS5 + substrate retrieval into a single ranked list.
+ * The Rust side handles OR-tokenization (so natural-language queries like
+ * "account settings danger" don't return zero hits under FTS5 default AND).
+ *
+ * Defensive: empty/whitespace-only queries return [].
+ */
+export async function findSubstrateByIntent(
+  query: string,
+  limit = 10,
+): Promise<IntentSearchHit[]> {
+  return invoke<IntentSearchHit[]>('find_substrate_by_intent', { query, limit });
+}

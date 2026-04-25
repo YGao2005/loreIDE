@@ -29,6 +29,7 @@ import { SessionStatusIndicator } from './SessionStatusIndicator';
 import { SubstrateStatusIndicator } from './SubstrateStatusIndicator';
 import { BackfillModal } from '@/components/session';
 import { CommandPalette } from '@/components/command-palette/CommandPalette';
+import { IntentPalette } from '@/components/command-palette/IntentPalette';
 import { MassEditTrigger } from '@/components/mass-edit/MassEditTrigger';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 
@@ -453,6 +454,18 @@ export function AppShell() {
             document level and works from any focused pane, and (b) its
             useReactFlow() call for "jump to node" setCenter resolves. */}
         <CommandPalette onFocusChat={handleFocusChat} onMassEdit={handleMassEdit} />
+
+        {/* Phase 13 Plan 03 (SUB-08): Cmd+P semantic intent palette. Sibling
+            of CommandPalette — both dialogs render under the ReactFlowProvider
+            scope and share commandPalette.css. Cmd+P runs an async FTS5+
+            substrate retrieval; Cmd+K runs a static action registry. They
+            never conflict because the keybindings differ and each dialog
+            owns its own `open` state. The intent palette intentionally has
+            no props — its navigation hooks (useGraphStore.pushParent +
+            setFocusedAtomUuid + useSidebarStore.setSelectedFlow) are direct
+            store imports, not callback props, because the right-panel/Inspector
+            doesn't own any palette-triggered behaviour. */}
+        <IntentPalette />
 
         {/* Phase 9 Plan 09-02: MassEditTrigger — opened by CommandPalette's
             "Mass edit by intent…" action. Mounted at AppShell root so the

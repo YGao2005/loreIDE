@@ -87,6 +87,10 @@ pub fn run() {
             commands::substrate_panel::get_total_substrate_count,
             commands::substrate::get_substrate_states_for_canvas,
             commands::substrate::get_substrate_node_detail,
+            // 13-03 Cmd+P palette retrieval (SUB-08). Wave 2 serialization_hint:
+            // appended AFTER 13-02's get_sidebar_tree per the macro-edit ordering
+            // contract documented in the plan frontmatter.
+            commands::substrate::find_substrate_by_intent,
             commands::supersession::ingest_substrate_node_with_invalidation,
             commands::supersession::find_substrate_history_cmd,
             commands::supersession::current_truth_query_cmd,
