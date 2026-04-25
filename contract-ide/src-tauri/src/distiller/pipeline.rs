@@ -293,21 +293,30 @@ pub async fn distill_episode(app: &AppHandle, episode_id: &str) -> Result<usize,
 /// v1 strategy: heuristic — atoms whose updated_at >= session.started_at OR
 /// atoms in the session's repo. Capped at 50 to keep the prompt hint manageable.
 /// Tighten to file-path matching only if atom precision proves poor in UAT.
+///
+/// Originally this filtered by `n.updated_at >= s.started_at` to restrict to
+/// atoms touched during the session, but two issues surfaced in practice:
+/// (1) `nodes.updated_at` stores `YYYY-MM-DD HH:MM:SS` while `sessions.started_at`
+/// stores ISO 8601 with timezone — string comparison is undefined; (2) atoms
+/// are derived during initial Phase 2/3 repo scan, BEFORE any runtime session,
+/// so the filter was structurally always-empty for repos that scanned once.
+///
+/// v1 broad fallback: return up to 50 most-recently-updated canonical atoms.
+/// `_session_id` is kept for future tightening (file-path matching against
+/// touched files in the session) but is currently unused.
 async fn load_session_atom_candidates(
     pool: &SqlitePool,
-    session_id: &str,
+    _session_id: &str,
 ) -> Result<Vec<(String, String, String)>, String> {
     let rows: Vec<(String, String, String)> = sqlx::query_as(
         r#"
         SELECT n.uuid, n.level, n.name
-        FROM nodes n, sessions s
-        WHERE s.session_id = ?
-          AND n.is_canonical = 1
-          AND (n.updated_at IS NOT NULL AND n.updated_at >= s.started_at)
+        FROM nodes n
+        WHERE n.is_canonical = 1
+        ORDER BY COALESCE(n.updated_at, '') DESC
         LIMIT 50
         "#,
     )
-    .bind(session_id)
     .fetch_all(pool)
     .await
     .map_err(|e| format!("atom candidates lookup: {e}"))?;
