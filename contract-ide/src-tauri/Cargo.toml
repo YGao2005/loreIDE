@@ -14,6 +14,14 @@ edition = "2021"
 name = "contract_ide_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+# Plan 12-04: Beat 3 demo backstop (`demo_force_intent_drift` Tauri command).
+# When enabled (`cargo build --features demo-fixture`), the command sets
+# substrate_nodes.intent_drift_state directly for a hardcoded uuid — used
+# only on demo recording day if the engine path is rate-limited. Default
+# builds compile a stub that returns an "feature not enabled" error.
+demo-fixture = []
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
@@ -45,4 +53,4 @@ regex = "1"
 
 [dev-dependencies]
 tempfile = "3"
-tokio = { version = "1", features = ["macros", "rt"] }
+tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread", "process"] }

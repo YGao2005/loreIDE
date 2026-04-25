@@ -1,0 +1,26 @@
+{
+  "old_l0": {
+    "uuid": "l0-v1-2024",
+    "text": "Optimize for time-to-market. Ship features fast; accept technical debt; prefer simple over robust.",
+    "summary": "Optimize for time-to-market. Ship features fast; accept technical debt; prefer simple over robust.",
+    "valid_at": "2024-01-01T00:00:00Z"
+  },
+  "new_l0": {
+    "uuid": "l0-v2-2025",
+    "text": "Optimize for operational reliability. Production stability over shipping speed; observability and graceful degradation are first-class; correctness over convenience.",
+    "summary": "Optimize for operational reliability. Production stability over shipping speed; observability and graceful degradation are first-class; correctness over convenience.",
+    "valid_at": "2025-07-01T00:00:00Z"
+  },
+  "decisions": [
+    { "uuid": "d1", "node_type": "decision", "text": "Use Redis as a read-through cache without write-through; accept stale reads for 30s.", "applies_when": "Faster than implementing cache invalidation.", "expected_verdict": "DRIFTED" },
+    { "uuid": "d2", "node_type": "decision", "text": "No unit tests for route handlers; relied on E2E tests hitting them indirectly.", "applies_when": "Saves ~2 weeks of test setup.", "expected_verdict": "DRIFTED" },
+    { "uuid": "d3", "node_type": "decision", "text": "TypeScript strict mode enabled from day 1.", "applies_when": "Catches bugs at compile time; small upfront cost, lots of downstream savings.", "expected_verdict": "NOT_DRIFTED" },
+    { "uuid": "d4", "node_type": "decision", "text": "Deploy by running a script on our laptops.", "applies_when": "CI/CD would be 1-2 weeks of setup we can't afford now.", "expected_verdict": "DRIFTED" },
+    { "uuid": "d5", "node_type": "decision", "text": "Use shadcn/ui component library.", "applies_when": "Faster UI prototyping than rolling our own.", "expected_verdict": "NOT_DRIFTED" },
+    { "uuid": "d6", "node_type": "decision", "text": "Let errors propagate; we'll add boundaries once the app is actually user-facing.", "applies_when": "Shipping faster without them.", "expected_verdict": "DRIFTED" },
+    { "uuid": "d7", "node_type": "decision", "text": "Use pnpm over npm.", "applies_when": "Faster installs, better monorepo support. Saves ~10s per install.", "expected_verdict": "NOT_DRIFTED" },
+    { "uuid": "d8", "node_type": "decision", "text": "Single-region AWS deployment (us-east-1).", "applies_when": "One region keeps ops simple. Multi-region is 2+ weeks of setup and 2x the cost.", "expected_verdict": "NEEDS_HUMAN_REVIEW" },
+    { "uuid": "d9", "node_type": "decision", "text": "Environment-variable-based feature flags.", "applies_when": "Use ENV vars instead of a feature-flag service. Simple, no external dependency.", "expected_verdict": "NOT_DRIFTED" },
+    { "uuid": "d10", "node_type": "decision", "text": "Push to SQS, don't wait for ack, don't retry.", "applies_when": "Simpler, faster code path.", "expected_verdict": "DRIFTED" }
+  ]
+}

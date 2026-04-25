@@ -1,0 +1,22 @@
+{
+  "scenario": "JWT → OAuth contradiction",
+  "seed_nodes": [
+    {
+      "uuid": "stale-jwt-auth",
+      "node_type": "decision",
+      "text": "Authenticate API requests with JWT bearer tokens issued by our /api/auth endpoint.",
+      "scope": "global",
+      "applies_when": "authenticating any API request",
+      "valid_at": "2025-03-01T00:00:00Z"
+    }
+  ],
+  "new_node": {
+    "uuid": "new-oauth",
+    "node_type": "decision",
+    "text": "Authenticate API requests via OAuth 2.0 with PKCE; the legacy JWT endpoint is removed.",
+    "scope": "global",
+    "applies_when": "authenticating any API request",
+    "valid_at": "2026-04-24T00:00:00Z"
+  },
+  "expected_invalidated": ["stale-jwt-auth"]
+}

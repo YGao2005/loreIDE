@@ -1,0 +1,22 @@
+{
+  "scenario": "Cache TTL 30s → 1s contradiction",
+  "seed_nodes": [
+    {
+      "uuid": "stale-cache-30s",
+      "node_type": "decision",
+      "text": "Cache product listing pages for 30 seconds; stale reads acceptable for performance.",
+      "scope": "module:catalog",
+      "applies_when": "rendering catalog or search results",
+      "valid_at": "2025-06-01T00:00:00Z"
+    }
+  ],
+  "new_node": {
+    "uuid": "new-cache-1s",
+    "node_type": "decision",
+    "text": "Cache product listing pages for 1 second maximum; near-real-time pricing is required for compliance.",
+    "scope": "module:catalog",
+    "applies_when": "rendering catalog or search results",
+    "valid_at": "2026-04-24T00:00:00Z"
+  },
+  "expected_invalidated": ["stale-cache-30s"]
+}

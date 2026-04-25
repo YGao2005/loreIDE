@@ -1,0 +1,22 @@
+{
+  "scenario": "REST → gRPC contradiction",
+  "seed_nodes": [
+    {
+      "uuid": "stale-rest-2025",
+      "node_type": "constraint",
+      "text": "Use HTTP+JSON for all internal RPC; never raw TCP or binary protocols.",
+      "scope": "global",
+      "applies_when": "any service-to-service communication",
+      "valid_at": "2025-01-15T00:00:00Z"
+    }
+  ],
+  "new_node": {
+    "uuid": "new-grpc-2026",
+    "node_type": "constraint",
+    "text": "Use gRPC for all service-to-service communication; HTTP+JSON only for browser-facing APIs.",
+    "scope": "global",
+    "applies_when": "any service-to-service communication",
+    "valid_at": "2026-04-24T00:00:00Z"
+  },
+  "expected_invalidated": ["stale-rest-2025"]
+}

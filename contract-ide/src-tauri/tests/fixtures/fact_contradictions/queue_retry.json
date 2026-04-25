@@ -1,0 +1,22 @@
+{
+  "scenario": "Fire-and-forget queue → with-retries contradiction",
+  "seed_nodes": [
+    {
+      "uuid": "stale-no-retry",
+      "node_type": "decision",
+      "text": "Push notifications use SQS fire-and-forget — no retries, no acknowledgements; simpler code path.",
+      "scope": "module:notifications",
+      "applies_when": "sending push or email notifications",
+      "valid_at": "2025-04-01T00:00:00Z"
+    }
+  ],
+  "new_node": {
+    "uuid": "new-with-retry",
+    "node_type": "constraint",
+    "text": "All notifications must use a queue with at-least-once delivery + 5 retries with exponential backoff.",
+    "scope": "module:notifications",
+    "applies_when": "sending push or email notifications",
+    "valid_at": "2026-04-24T00:00:00Z"
+  },
+  "expected_invalidated": ["stale-no-retry"]
+}
