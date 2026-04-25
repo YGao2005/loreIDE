@@ -64,10 +64,12 @@ pub async fn run_agent(
     bare: Option<bool>,
     model: Option<String>,
     effort: Option<String>,
+    extra_args: Option<Vec<String>>,
 ) -> Result<String, String> {
     let bare = bare.unwrap_or(false);
     let model = model.unwrap_or_else(|| DEFAULT_AGENT_MODEL.to_string());
     let effort = effort.unwrap_or_else(|| DEFAULT_AGENT_EFFORT.to_string());
+    let extra_args = extra_args.unwrap_or_default();
     let tracking_id = uuid::Uuid::new_v4().to_string();
 
     eprintln!(
@@ -156,6 +158,10 @@ pub async fn run_agent(
     if bare {
         claude_args.push("--bare".to_string());
     }
+    // Caller-provided extras (e.g. delegate_execute passes lean-mode flags +
+    // a focused mcp-config that loads only the contract-ide MCP server,
+    // skipping Chrome/Firebase/Scholar/etc to cut startup latency).
+    claude_args.extend(extra_args);
     let (mut rx, child) = app
         .shell()
         .command("claude")

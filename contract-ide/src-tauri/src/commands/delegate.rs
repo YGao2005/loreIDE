@@ -74,8 +74,13 @@ ALSO: After writing code, emit a `decisions.json` file at `.contracts/decisions/
 List the implicit decisions you made — defaults you picked that no substrate rule explicitly demanded (e.g. "email_link_expiry_hours: 24"). Aim for 3-5 entries covering the most consequential implicit choices."#
     );
 
-    // Reuse Phase 8's run_agent with bare=true (Phase 11 amendment).
-    // Do NOT re-implement spawn/streaming/receipt logic — that all lives in Phase 8's agent.rs.
+    // Build the lean-mode flag set with ONLY the contract-ide MCP loaded —
+    // skips Chrome/Firebase/Scholar/etc. (~15-20s startup → ~4s) while keeping
+    // the agent's substrate tools (find_constraints_for_goal, find_by_intent,
+    // find_decisions_about, open_questions, get_contract).
+    let extra_args = build_lean_with_contract_ide_mcp(&app);
+
+    // Reuse Phase 8's run_agent. Do NOT re-implement spawn/streaming/receipt logic.
     //
     // Opt up to sonnet + medium effort: the chat panel's haiku/low defaults
     // optimize for conversational latency, but delegate writes code and
@@ -87,14 +92,93 @@ List the implicit decisions you made — defaults you picked that no substrate r
         execute_prompt,
         Some(scope_uuid),
         // bare=false: --bare requires ANTHROPIC_API_KEY (OAuth keychain ignored).
-        // Claude Code-only auth — accept 1-3s CLAUDE.md/MCP discovery overhead.
         Some(false),
         Some("sonnet".to_string()),
         Some("medium".to_string()),
+        Some(extra_args),
     )
     .await?;
 
     Ok(tracking_id)
+}
+
+/// Build the lean-mode args + a focused mcp-config that loads only the
+/// contract-ide MCP server. Returns the args ready to append to claude's argv.
+///
+/// Keeps the agent's substrate-query tools while skipping the user's other
+/// MCP servers (Chrome, Firebase, Scholar, etc.) which add 10-15s of startup
+/// latency without benefit for code-writing.
+///
+/// Falls back to empty mcp-config (no servers) if any path resolution fails;
+/// the agent loses contract-ide tools but still runs (better than blocking).
+fn build_lean_with_contract_ide_mcp(app: &tauri::AppHandle) -> Vec<String> {
+    let mcp_servers_json = match resolve_contract_ide_mcp_config(app) {
+        Some(json) => json,
+        None => r#"{"mcpServers":{}}"#.to_string(),
+    };
+
+    vec![
+        "--strict-mcp-config".to_string(),
+        "--mcp-config".to_string(),
+        mcp_servers_json,
+        "--disable-slash-commands".to_string(),
+        "--no-session-persistence".to_string(),
+    ]
+}
+
+/// Resolve the contract-ide MCP server binary + DB + repo paths and return
+/// the mcp-config JSON. Returns None if any path resolution fails (caller
+/// falls back to no-MCP mode).
+fn resolve_contract_ide_mcp_config(app: &tauri::AppHandle) -> Option<String> {
+    use tauri::Manager;
+
+    // MCP binary path: same resolution Tauri uses for sidecar("mcp-server").
+    // resource_dir is the bundled-app location at runtime; in dev tauri puts
+    // the binary at <resource_dir>/binaries/mcp-server-<triple>.
+    let resource_dir = app.path().resource_dir().ok()?;
+    let triple = format!("{}-apple-darwin", std::env::consts::ARCH);
+    let bin_path = resource_dir
+        .join("binaries")
+        .join(format!("mcp-server-{triple}"));
+    if !bin_path.exists() {
+        eprintln!(
+            "[delegate_execute] mcp-server binary not found at {} — falling back to no-MCP",
+            bin_path.display()
+        );
+        return None;
+    }
+
+    let db_path = app.path().app_data_dir().ok()?.join("contract-ide.db");
+
+    // Repo path is optional — without it, MCP tools that need a repo context
+    // gracefully fail; the substrate-query tools (find_constraints_for_goal etc.)
+    // only need the DB.
+    let repo_path: Option<String> = app
+        .try_state::<crate::commands::repo::RepoState>()
+        .and_then(|state| {
+            state
+                .0
+                .lock()
+                .ok()
+                .and_then(|guard| guard.as_ref().map(|p| p.to_string_lossy().into_owned()))
+        });
+
+    let mut env_obj = serde_json::json!({
+        "CONTRACT_IDE_DB_PATH": db_path.to_string_lossy(),
+    });
+    if let Some(rp) = repo_path {
+        env_obj["CONTRACT_IDE_REPO_PATH"] = serde_json::Value::String(rp);
+    }
+
+    let config = serde_json::json!({
+        "mcpServers": {
+            "contract-ide": {
+                "command": bin_path.to_string_lossy(),
+                "env": env_obj,
+            }
+        }
+    });
+    Some(config.to_string())
 }
 
 /// Read the decisions manifest for the given atom_uuid.
