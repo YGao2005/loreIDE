@@ -86,12 +86,12 @@ pub async fn walk_rollup_descendants(
             // JSON-string match — scope is narrow at hackathon scale.
             let pattern = format!(r#"%"child_uuid":"{u}"%"#);
             let rows: Vec<(String,)> = sqlx::query_as(
-                "SELECT uuid FROM nodes WHERE rollup_inputs LIKE ?1",
+                "SELECT uuid FROM nodes WHERE rollup_inputs_json LIKE ?1",
             )
             .bind(&pattern)
             .fetch_all(pool)
             .await
-            .map_err(|e| format!("walker rollup_inputs scan: {e}"))?;
+            .map_err(|e| format!("walker rollup_inputs_json scan: {e}"))?;
             citation_children.extend(rows.into_iter().map(|(u,)| u));
         }
 
@@ -184,7 +184,7 @@ mod tests {
                uuid TEXT PRIMARY KEY,
                level TEXT,
                parent_uuid TEXT,
-               rollup_inputs TEXT
+               rollup_inputs_json TEXT
              );",
         )
         .execute(&pool)
