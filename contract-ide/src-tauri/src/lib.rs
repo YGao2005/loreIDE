@@ -76,6 +76,7 @@ pub fn run() {
             commands::distiller::list_dead_letters,
             commands::distiller::retry_dead_letter,
             commands::distiller::get_substrate_count_for_session,
+            commands::distiller::redistill_all_episodes,
             commands::delegate::delegate_compose,
             commands::delegate::delegate_plan,
             commands::delegate::delegate_execute,

@@ -72,3 +72,34 @@ export async function subscribeSessionStatus(
 ): Promise<UnlistenFn> {
   return listen<SessionStatusEvent>('session:status', (event) => cb(event.payload));
 }
+
+export interface RedistillResult {
+  episodesProcessed: number;
+  substrateUpserted: number;
+  failures: number;
+}
+
+export interface RedistillProgress {
+  current: number;
+  total: number;
+  episode_id: string;
+}
+
+/**
+ * Re-run the distiller against every existing episode (or one session's
+ * episodes if `sessionId` is provided). Sequential — respects per-session
+ * DistillerLocks. Useful after distiller-pipeline fixes to rebuild substrate
+ * from already-ingested episodes (INSERT OR IGNORE skips the
+ * episode:ingested event on re-backfill, so this is the only retroactive path).
+ */
+export async function redistillAllEpisodes(
+  sessionId?: string,
+): Promise<RedistillResult> {
+  return invoke<RedistillResult>('redistill_all_episodes', { sessionId });
+}
+
+export async function subscribeRedistillProgress(
+  cb: (p: RedistillProgress) => void,
+): Promise<UnlistenFn> {
+  return listen<RedistillProgress>('redistill:progress', (event) => cb(event.payload));
+}

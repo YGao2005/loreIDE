@@ -87,3 +87,65 @@ pub async fn get_substrate_count_for_session(
     .map_err(|e| format!("count: {e}"))?;
     Ok(row.0)
 }
+
+#[derive(Debug, serde::Serialize)]
+pub struct RedistillResult {
+    pub episodes_processed: usize,
+    pub substrate_upserted: usize,
+    pub failures: usize,
+}
+
+/// Re-run `distill_episode` for every existing episode (or just episodes for one
+/// session if `session_id` is provided). Useful after a distiller-pipeline bug
+/// fix lands and you want to rebuild substrate from already-ingested episodes
+/// — `INSERT OR IGNORE INTO episodes` short-circuits the `episode:ingested`
+/// event on re-backfill, so this is the only way to re-trigger distillation
+/// without dropping the episodes table.
+///
+/// Sequential to respect per-session DistillerLocks. Failures are dead-lettered
+/// inside `distill_episode` itself; this command tallies counts only.
+#[tauri::command]
+pub async fn redistill_all_episodes(
+    app: tauri::AppHandle,
+    session_id: Option<String>,
+) -> Result<RedistillResult, String> {
+    let pool = pool_clone(&app).await?;
+    let episode_ids: Vec<(String,)> = if let Some(sid) = session_id.as_deref() {
+        sqlx::query_as("SELECT episode_id FROM episodes WHERE session_id = ? ORDER BY rowid")
+            .bind(sid)
+            .fetch_all(&pool)
+            .await
+    } else {
+        sqlx::query_as("SELECT episode_id FROM episodes ORDER BY rowid")
+            .fetch_all(&pool)
+            .await
+    }
+    .map_err(|e| format!("episode list: {e}"))?;
+
+    let mut substrate_upserted = 0;
+    let mut failures = 0;
+    let total = episode_ids.len();
+
+    for (idx, (episode_id,)) in episode_ids.iter().enumerate() {
+        // Best-effort progress emit so the UI can render a live counter.
+        let _ = tauri::Emitter::emit(
+            &app,
+            "redistill:progress",
+            serde_json::json!({
+                "current": idx + 1,
+                "total": total,
+                "episode_id": episode_id,
+            }),
+        );
+        match distill_episode(&app, episode_id).await {
+            Ok(n) => substrate_upserted += n,
+            Err(_) => failures += 1, // already dead-lettered inside distill_episode
+        }
+    }
+
+    Ok(RedistillResult {
+        episodes_processed: total,
+        substrate_upserted,
+        failures,
+    })
+}

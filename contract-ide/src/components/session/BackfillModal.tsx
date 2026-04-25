@@ -13,7 +13,11 @@ import {
   executeBackfill,
   getBackfillPreview,
   getSessionStatus,
+  redistillAllEpisodes,
+  subscribeRedistillProgress,
   type BackfillPreview,
+  type RedistillProgress,
+  type RedistillResult,
 } from '@/ipc/session';
 import { useSessionStore } from '@/store/session';
 
@@ -59,6 +63,9 @@ export function BackfillModal() {
   const [error, setError] = useState<string | null>(null);
   const [resultEpisodes, setResultEpisodes] = useState<number | null>(null);
   const [loadingFiles, setLoadingFiles] = useState(false);
+  const [redistilling, setRedistilling] = useState(false);
+  const [redistillProgress, setRedistillProgress] = useState<RedistillProgress | null>(null);
+  const [redistillResult, setRedistillResult] = useState<RedistillResult | null>(null);
 
   // Reset state on close so re-opens start clean.
   useEffect(() => {
@@ -70,8 +77,39 @@ export function BackfillModal() {
       setError(null);
       setResultEpisodes(null);
       setLoadingFiles(false);
+      setRedistilling(false);
+      setRedistillProgress(null);
+      setRedistillResult(null);
     }
   }, [open]);
+
+  // Subscribe to redistill progress so the UI can show "Distilling 12/77".
+  useEffect(() => {
+    if (!open) return;
+    let unlisten: (() => void) | undefined;
+    subscribeRedistillProgress((p) => setRedistillProgress(p)).then((fn) => {
+      unlisten = fn;
+    });
+    return () => unlisten?.();
+  }, [open]);
+
+  async function handleRedistill() {
+    setError(null);
+    setRedistilling(true);
+    setRedistillProgress(null);
+    setRedistillResult(null);
+    try {
+      const result = await redistillAllEpisodes();
+      setRedistillResult(result);
+      // Refresh footer counter after redistill completes.
+      const st = await getSessionStatus();
+      useSessionStore.getState().setStatus(st);
+    } catch (e) {
+      setError(typeof e === 'string' ? e : 'Redistill failed');
+    } finally {
+      setRedistilling(false);
+    }
+  }
 
   // Fetch historical session list when the modal opens (or returns to
   // select step via Back button).
@@ -163,6 +201,49 @@ export function BackfillModal() {
         {error && (
           <div className="rounded border border-red-500/50 bg-red-500/10 p-3 text-xs text-red-200">
             {error}
+          </div>
+        )}
+
+        {step === 'select' && (
+          <div className="rounded border border-amber-500/40 bg-amber-500/5 p-3 text-xs space-y-2">
+            <div className="font-semibold text-foreground">
+              Re-distill already-ingested episodes
+            </div>
+            <p className="text-muted-foreground">
+              Backfill ingests session JSONLs into <code>episodes</code> but does not
+              call the distiller for episodes already present. Use this to rebuild
+              substrate from previously-ingested episodes after a distiller fix
+              (e.g. a claude-CLI auth or stdin patch).
+            </p>
+            {redistilling && (
+              <div className="text-muted-foreground tabular-nums">
+                Distilling{redistillProgress
+                  ? ` ${redistillProgress.current}/${redistillProgress.total}`
+                  : '…'}
+                {redistillProgress?.episode_id
+                  ? ` · ${redistillProgress.episode_id.slice(0, 12)}…`
+                  : ''}
+              </div>
+            )}
+            {redistillResult && !redistilling && (
+              <div className="rounded border border-emerald-500/50 bg-emerald-500/10 px-2 py-1 text-emerald-200">
+                Processed {redistillResult.episodesProcessed} episodes →{' '}
+                {redistillResult.substrateUpserted} substrate nodes upserted
+                {redistillResult.failures > 0
+                  ? `, ${redistillResult.failures} dead-lettered`
+                  : ''}
+                .
+              </div>
+            )}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleRedistill}
+              disabled={redistilling}
+              className="text-xs"
+            >
+              {redistilling ? 'Redistilling…' : 'Redistill all episodes'}
+            </Button>
           </div>
         )}
 
