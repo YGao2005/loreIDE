@@ -1,22 +1,22 @@
 {
   "name": "workspace-delete",
   "prompt": "add a delete-workspace button to the team settings page",
-  "recorded_at": "2026-04-25T10:25:23Z",
+  "recorded_at": "2026-04-25T19:06:57Z",
   "demo_repo_sha": "9f5029b0f4667ef4c5182a5386092b8e201e01af",
+  "baseline_workspace": "/var/folders/xz/4754yl9j3xd_24n00x6s8q_r0000gp/T/contract-ide-baseline.bqGu3cAR4i/contract-ide-demo",
   "claude_version": "2.1.119 (Claude Code)",
   "conditions": {
     "no_contracts_dir": true,
     "no_claude_md": true,
-    "no_mcp_json": true
+    "no_mcp_json": true,
+    "history_clean": true
   },
-  "session_jsonl": "/Users/yang/.claude/projects/-Users-yang-lahacks-contract-ide-demo/48fa4ca4-ebd4-42a2-88e8-4e1af24fe232.jsonl",
-  "wall_time_seconds": 72,
+  "session_jsonl": "/Users/yang/.claude/projects/-private-var-folders-xz-4754yl9j3xd-24n00x6s8q-r0000gp-T-contract-ide-baseline-bqGu3cAR4i-contract-ide-demo/ccf1309c-e11e-4bc5-8d61-691c996c6519.jsonl",
+  "wall_time_seconds": 122,
   "metrics": {
-    "input_tokens": 32,
-    "output_tokens": 9284,
-    "cache_creation_input_tokens": 52090,
-    "cache_read_tokens": 863184,
-    "tool_calls": 13
-  },
-  "notes": "input_tokens=32 is the fresh prompt-only tokens. cache_creation_input_tokens=52090 is first-read codebase context. cache_read_tokens=863184 is subsequent cached reads. The pre-estimate of ~6,800 input_tokens in the presentation script assumed a much smaller demo repo. Actual: 49 contracts + full Next.js + Prisma + Stripe + Mailchimp (800k+ tokens total context at this call). Tool call count: 13 actual vs ~19 estimate — lower because DEMO-SETUP.md provides orientation, and the workspace task mirrors the account task structurally. Baseline is valid for the delta claim."
+    "input_tokens": 30,
+    "output_tokens": 14408,
+    "cache_read_tokens": 742513,
+    "tool_calls": 15
+  }
 }
