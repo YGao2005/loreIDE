@@ -185,21 +185,53 @@ fn build_fts_query(user_query: &str) -> String {
         return trimmed.to_string();
     }
 
-    // Split on any non-alphanumeric (whitespace + punctuation), FTS5-quote
-    // each term, join with " OR ". This way "account-button.tsx" yields three
-    // tokens (account, button, tsx) rather than one merged blob.
+    // Split on any non-alphanumeric (whitespace + punctuation), drop common
+    // English stopwords (they appear in nearly every contract body and balloon
+    // the result set with no signal), FTS5-quote each remaining term, join
+    // with " OR ". "account-button.tsx" → 3 tokens (account, button, tsx).
     let tokens: Vec<String> = trimmed
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|t| !t.is_empty())
+        .filter(|t| !FTS_STOPWORDS.contains(&t.to_ascii_lowercase().as_str()))
+        .map(|t| format!("\"{t}\""))
+        .collect();
+
+    if !tokens.is_empty() {
+        return tokens.join(" OR ");
+    }
+
+    // Fallback: every word was a stopword. Re-tokenize WITHOUT the stopword
+    // filter so the user gets some result for stopword-only queries instead
+    // of an empty match expression.
+    let fallback: Vec<String> = trimmed
         .split(|c: char| !c.is_alphanumeric())
         .filter(|t| !t.is_empty())
         .map(|t| format!("\"{t}\""))
         .collect();
 
-    if tokens.is_empty() {
+    if fallback.is_empty() {
         trimmed.to_string()
     } else {
-        tokens.join(" OR ")
+        fallback.join(" OR ")
     }
 }
+
+/// English stopwords filtered out of OR-tokenized FTS queries.
+///
+/// These appear in nearly every contract body, so OR'ing them in causes the
+/// result set to balloon with no signal (e.g., the SC1 query without filtering
+/// returns 46/52 nodes; with filtering it returns 25). Conservative list —
+/// articles, prepositions, common determiners, basic auxiliary verbs. Action
+/// verbs (add, remove, delete, update) are NOT stopwords.
+const FTS_STOPWORDS: &[&str] = &[
+    "a", "an", "the",
+    "to", "of", "in", "on", "at", "by", "for", "from", "with", "into", "onto",
+    "and", "or", "but",
+    "every", "all", "any", "each", "some",
+    "this", "that", "these", "those", "it", "its",
+    "is", "are", "was", "were", "be", "been", "being",
+    "has", "have", "had",
+];
 
 /// Tauri command: mass-edit retrieval via FTS5 + section-weighted re-ranking.
 ///
@@ -313,12 +345,29 @@ mod fts_query_tests {
     use super::build_fts_query;
 
     #[test]
-    fn natural_language_or_tokenizes() {
+    fn natural_language_or_tokenizes_with_stopwords_dropped() {
+        // The canonical SC1 query: "add" stays (action verb, not stopword);
+        // "to" and "every" are dropped (stopwords).
         let q = build_fts_query("add audit logging to every destructive endpoint");
         assert_eq!(
             q,
-            r#""add" OR "audit" OR "logging" OR "to" OR "every" OR "destructive" OR "endpoint""#
+            r#""add" OR "audit" OR "logging" OR "destructive" OR "endpoint""#
         );
+    }
+
+    #[test]
+    fn stopwords_only_falls_back_to_no_filter() {
+        // If every word is a stopword, we'd otherwise emit empty MATCH.
+        // Fallback re-tokenizes WITHOUT the filter so the user gets a result.
+        let q = build_fts_query("the all every");
+        assert_eq!(q, r#""the" OR "all" OR "every""#);
+    }
+
+    #[test]
+    fn case_insensitive_stopword_match() {
+        // "TO", "To", "to" all filtered.
+        let q = build_fts_query("audit TO destructive");
+        assert_eq!(q, r#""audit" OR "destructive""#);
     }
 
     #[test]

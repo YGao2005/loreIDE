@@ -17,13 +17,38 @@
  */
 
 /**
+ * English stopwords filtered out of OR-tokenized FTS queries.
+ *
+ * These appear in nearly every contract body, so OR'ing them in causes the
+ * result set to balloon with no signal (e.g., the SC1 query without filtering
+ * returns 46/52 nodes; with filtering it returns 25). Conservative list —
+ * articles, prepositions, common determiners, basic auxiliary verbs. Action
+ * verbs (add, remove, delete, update) are NOT stopwords.
+ *
+ * MUST be kept in sync with FTS_STOPWORDS in src-tauri/src/commands/mass_edit.rs
+ * so the MCP tool path and the frontend Rust IPC path produce identical
+ * MATCH expressions for the same user input.
+ */
+const FTS_STOPWORDS = new Set<string>([
+  'a', 'an', 'the',
+  'to', 'of', 'in', 'on', 'at', 'by', 'for', 'from', 'with', 'into', 'onto',
+  'and', 'or', 'but',
+  'every', 'all', 'any', 'each', 'some',
+  'this', 'that', 'these', 'those', 'it', 'its',
+  'is', 'are', 'was', 'were', 'be', 'been', 'being',
+  'has', 'have', 'had',
+]);
+
+/**
  * Build an FTS5 MATCH expression from a free-form user query.
  *
  * - Empty input → empty string (caller should short-circuit before binding)
  * - Already-structured query (contains uppercase AND/OR/NOT, NEAR, or quoted
  *   phrases) → pass through verbatim
- * - Natural-language query → split on any non-alphanumeric, FTS5-quote each
- *   token, join with " OR "
+ * - Natural-language query → split on any non-alphanumeric, drop stopwords,
+ *   FTS5-quote each remaining term, join with " OR "
+ * - Stopwords-only query → fall back to no-filter tokenization so the user
+ *   still gets a result rather than an empty MATCH
  */
 export function buildFtsQuery(userQuery: string): string {
   const trimmed = userQuery.trim();
@@ -39,14 +64,19 @@ export function buildFtsQuery(userQuery: string): string {
     trimmed.includes('"');
   if (hasOperator) return trimmed;
 
-  // Split on any non-alphanumeric (whitespace + punctuation), FTS5-quote each
-  // term, join with " OR ". This way "account-button.tsx" yields three tokens
-  // (account, button, tsx) rather than one merged blob.
-  const tokens = trimmed
-    .split(/[^A-Za-z0-9]+/)
-    .filter((t) => t.length > 0)
+  const rawTokens = trimmed.split(/[^A-Za-z0-9]+/).filter((t) => t.length > 0);
+
+  // Drop stopwords (case-insensitive), FTS5-quote each remaining term,
+  // join with " OR ". "account-button.tsx" → 3 tokens (account, button, tsx).
+  const filtered = rawTokens
+    .filter((t) => !FTS_STOPWORDS.has(t.toLowerCase()))
     .map((t) => `"${t}"`);
 
-  if (tokens.length === 0) return trimmed;
-  return tokens.join(' OR ');
+  if (filtered.length > 0) return filtered.join(' OR ');
+
+  // Fallback: every word was a stopword. Re-tokenize WITHOUT the filter so
+  // the user gets some result for stopword-only queries.
+  const fallback = rawTokens.map((t) => `"${t}"`);
+  if (fallback.length === 0) return trimmed;
+  return fallback.join(' OR ');
 }

@@ -11,9 +11,19 @@ import { describe, expect, test } from 'bun:test';
 import { buildFtsQuery } from '../src/lib/fts_query';
 
 describe('buildFtsQuery', () => {
-  test('natural-language query OR-tokenizes', () => {
+  test('natural-language query OR-tokenizes with stopwords dropped', () => {
+    // "add" stays (action verb, not stopword); "to" + "every" dropped.
     expect(buildFtsQuery('add audit logging to every destructive endpoint'))
-      .toBe('"add" OR "audit" OR "logging" OR "to" OR "every" OR "destructive" OR "endpoint"');
+      .toBe('"add" OR "audit" OR "logging" OR "destructive" OR "endpoint"');
+  });
+
+  test('stopwords-only query falls back to no-filter tokenization', () => {
+    expect(buildFtsQuery('the all every')).toBe('"the" OR "all" OR "every"');
+  });
+
+  test('case-insensitive stopword match', () => {
+    expect(buildFtsQuery('audit TO destructive'))
+      .toBe('"audit" OR "destructive"');
   });
 
   test('structured OR query passes through', () => {
@@ -42,14 +52,14 @@ describe('buildFtsQuery', () => {
     expect(buildFtsQuery('destructive')).toBe('"destructive"');
   });
 
-  test('matches Rust IPC output for SC1 query', () => {
-    // This must produce byte-identical output to the Rust helper in
+  test('matches Rust IPC output for SC1 query (stopwords filtered)', () => {
+    // Must produce byte-identical output to the Rust helper in
     // src-tauri/src/commands/mass_edit.rs :: build_fts_query — both paths
     // bind to the same FTS5 MATCH operator so divergence here means the
     // MCP tool and the frontend would return different result sets for
     // the same user query.
     const sc1 = 'add audit logging to every destructive endpoint';
     expect(buildFtsQuery(sc1))
-      .toBe('"add" OR "audit" OR "logging" OR "to" OR "every" OR "destructive" OR "endpoint"');
+      .toBe('"add" OR "audit" OR "logging" OR "destructive" OR "endpoint"');
   });
 });
