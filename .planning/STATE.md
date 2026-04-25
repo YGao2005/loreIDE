@@ -5,14 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-04-24)
 
 **Core value:** A developer or PM can locate any piece of the product by intent, edit its contract, and have the agent produce the corresponding code change — without touching the file tree.
-**Current focus:** Phase 13 Plan 01 complete (2026-04-25). Foundational substrate-state plumbing landed (SUB-08 + CHIP-03): useSubstrateStore extended additively with nodeStates Map<uuid, SubstrateNodeState> alongside Phase 11's footer counter slice; useGraphStore extended with focusedAtomUuid slice; two new Tauri commands (get_substrate_states_for_canvas, get_substrate_node_detail) reading the actual substrate_nodes schema with defensive table + intent_drift_state column existence checks; CVA intent_drifted (orange-600 + 8px glow + pulse) and superseded (orange-400 + opacity 0.75, no pulse) variants; resolveNodeState compositor with explicit precedence (drifted > intent_drifted > rollup_stale > superseded > rollup_untracked > healthy) exported as load-bearing import for Wave 2 plans; GraphCanvasInner.buildFlowNodes rewired through resolveNodeState; AppShell hydrates substrate state on mount. 6 unit tests + full lib suite (104/104) pass. Commits 2ca959d, 7e8c471. Wave 2 (13-02/03/04/05) unblocked.
+**Current focus:** Phase 12 Plan 04 Tasks 1+2 complete + Task 3 UAT runbook authored (2026-04-25). Adversarial regression harness (5 fact-contradiction fixtures: REST→gRPC / cache TTL 30s→1s / JWT→OAuth / Redis→Postgres MV / fire-forget→retry + 1 intent baseline fixture: 10 decisions per research/intent-supersession evaluation), gated by CI_LLM_LIVE=1 + #[ignore] (asserts recall ≥ 0.80, precision ≥ 0.85 on facts; ≥ 8/10 + d8 NEEDS_HUMAN_REVIEW on intents). Fixture-load sanity tests run in plain `cargo test`. demo_force_intent_drift Tauri command (Beat 3 backstop) cfg-gated by demo-fixture cargo feature with stub-fallback for default builds + runtime repo-path safety gate (.contains('contract-ide-demo')). Both build flavors clean (default + --features demo-fixture). 12-UAT.md runbook (505 lines) covers SC1+SC2+SC3+Beat 3 dual-path. Tasks 1+2: commits abde980, 0999e8c. UAT.md deliverable: commit 20158ea. Task 3 (checkpoint:human-verify) PENDING Yang sign-off — does NOT auto-pass per `autonomous: false`.
+
+Phase 13 Plan 01 complete (2026-04-25, prior session). Foundational substrate-state plumbing landed (SUB-08 + CHIP-03): useSubstrateStore extended additively with nodeStates Map<uuid, SubstrateNodeState> alongside Phase 11's footer counter slice; useGraphStore extended with focusedAtomUuid slice; two new Tauri commands (get_substrate_states_for_canvas, get_substrate_node_detail) reading the actual substrate_nodes schema with defensive table + intent_drift_state column existence checks; CVA intent_drifted (orange-600 + 8px glow + pulse) and superseded (orange-400 + opacity 0.75, no pulse) variants; resolveNodeState compositor with explicit precedence (drifted > intent_drifted > rollup_stale > superseded > rollup_untracked > healthy) exported as load-bearing import for Wave 2 plans; GraphCanvasInner.buildFlowNodes rewired through resolveNodeState; AppShell hydrates substrate state on mount. 6 unit tests + full lib suite (104/104) pass. Commits 2ca959d, 7e8c471. Wave 2 (13-02/03/04/05) unblocked.
 
 ## Current Position
 
 Phase: 13 of 13 (Substrate UI + Demo Polish) — IN PROGRESS
 Plan: 1 of 12 complete in current phase
 Status: Phase 13 Plan 01 COMPLETE (2026-04-25). Foundational substrate-state plumbing landed (SUB-08 + CHIP-03). useSubstrateStore extended additively (Phase 11 footer counter slice preserved + Phase 13 nodeStates Map slice added). focusedAtomUuid slice on graphStore (canonical setter API: selectNode, NOT setSelectedNode). get_substrate_states_for_canvas + get_substrate_node_detail Rust commands with defensive PRAGMA table_info column check. CVA intent_drifted + superseded variants. resolveNodeState exported (load-bearing for 13-04/05/06/07/09). 6 substrate-module unit tests + 104/104 full lib tests; clippy clean. Commits 2ca959d, 7e8c471.
-Last activity: 2026-04-25 — Phase 13 Wave 1 complete: 13-01 plumbing landed. Wave 2 (plans 13-02, 13-03, 13-04, 13-05) all unblocked — they import resolveNodeState + useSubstrateStore.nodeStates + focusedAtomUuid.
+Last activity: 2026-04-25 — Phase 12 Plan 04 Tasks 1+2 complete + 12-UAT.md authored; Task 3 checkpoint:human-verify PENDING Yang's UAT sign-off (SC1+SC2+SC3+Beat 3 dual-path). Phase 13 Wave 1 (13-01 plumbing) was completed in a prior session; Wave 2 (13-02/03/04/05) unblocked.
 
 Progress: [██████████] 95% (7/13 phases complete + Phase 10 4/4 + Phase 11 Wave 2 complete + Phase 12 3/4 + Phase 13 1/12 — Phases 1, 2, 3, 5, 6, 7, 10 complete; Phase 4 partially landed; Phase 8 implementation done pending UAT; Phase 9 code-shipped 8/8 plans; Phase 11 Plans 01–04 complete; Phase 12 Plans 01–03 complete; Phase 13 Plan 01 complete; UAT execution (09-UAT.md) is the Phase 9 closure gate)
 
@@ -78,6 +80,7 @@ Progress: [██████████] 95% (7/13 phases complete + Phase 10 
 | Phase 11-distiller-constraint-store-contract-anchored-retrieval P05 | 5 | 2 tasks | 9 files |
 | Phase 12-conflict-supersession-engine P03 | 8min | 2 tasks | 5 files |
 | Phase 13 P01 | 8 min | 2 tasks | 9 files |
+| Phase 12-conflict-supersession-engine P04 | 11min | 2 of 3 (Task 3=UAT human-verify pending Yang) tasks | 13 files |
 
 ## Accumulated Context
 
@@ -303,6 +306,9 @@ Recent decisions affecting current work:
 - [Phase 13]: resolveNodeState exported from contractNodeStyles.ts as load-bearing import for Wave 2 plans 13-04/05/06/07/09 — single precedence definition site (drifted > intent_drifted > rollup_stale > superseded > rollup_untracked > healthy)
 - [Phase 13]: Defensive PRAGMA table_info column check in get_substrate_states_for_canvas — app boots even when Phase 12 v7 migration hasn't run; falls back to invalid_at-only state derivation
 - [Phase 13]: focusedAtomUuid slice on graphStore (NOT substrateStore) — UI-interaction marker, not substrate semantic. Canonical setter API: useGraphStore.getState().selectNode(uuid) NOT setSelectedNode
+- [Phase 12-conflict-supersession-engine]: 12-04: Adversarial harness (5 fact + 1 intent baseline fixtures) gated by CI_LLM_LIVE=1 — first-run numbers become regression baseline — Per RESEARCH.md Pattern 5: recall ≥ 0.80, precision ≥ 0.85 thresholds; ≥ 8/10 baseline match for intent + d8 NEEDS_HUMAN_REVIEW special case
+- [Phase 12-conflict-supersession-engine]: 12-04: demo_force_intent_drift uses stub-fallback pattern (real impl + stub on opposite cfg arms) — generate_handler! always references same symbol; function body is the gate — Tauri's macro doesn't support cfg-block insertion cleanly; stub-pattern means JS callers always have a stable command name regardless of build flavor
+- [Phase 12-conflict-supersession-engine]: 12-04: Beat 3 backstop layered safety — compile-time cfg(feature=demo-fixture) + runtime path heuristic (.contains('contract-ide-demo')) — both required to mutate state — Production binaries cannot reach impl regardless of caller; runtime gate is belt-and-braces against accidental triggering in feature-enabled builds opened against non-demo repos
 
 ### Pending Todos
 
