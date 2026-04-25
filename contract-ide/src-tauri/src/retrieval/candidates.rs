@@ -3,6 +3,39 @@ use crate::retrieval::{ScopeUsed, SubstrateHit};
 use sqlx::SqlitePool;
 use std::collections::HashMap;
 
+/// Sanitize free-form text (markdown contract body, prose) into a safe FTS5 MATCH expression.
+///
+/// FTS5 has reserved syntax — `#`, `*`, `:`, `^`, `(`, `)`, `"`, leading `-`, etc. — and any
+/// of those characters appearing raw in a MATCH query produces `fts5: syntax error near "X"`.
+/// Contract bodies are markdown with `#` headers, code fences, colons, asterisks, hyphens —
+/// every one of those landmines.
+///
+/// Strategy: tokenize on whitespace, strip non-alphanumeric chars per token, drop tokens
+/// shorter than 3 chars (FTS5 noise), phrase-quote each surviving token, OR-join. Caps at
+/// 32 tokens to bound the resulting query size on long contract bodies.
+///
+/// Returns None if sanitization yields zero tokens — caller should treat as "no FTS5 match"
+/// rather than executing an empty query.
+fn sanitize_fts5_query(raw: &str) -> Option<String> {
+    let tokens: Vec<String> = raw
+        .split_whitespace()
+        .map(|tok| {
+            tok.chars()
+                .filter(|c| c.is_alphanumeric())
+                .collect::<String>()
+                .to_lowercase()
+        })
+        .filter(|tok| tok.len() >= 3)
+        .take(32)
+        .map(|tok| format!("\"{tok}\""))
+        .collect();
+    if tokens.is_empty() {
+        None
+    } else {
+        Some(tokens.join(" OR "))
+    }
+}
+
 /// Top-N candidate selection via FTS5 + cousin-exclusion JOIN on anchored_uuids +
 /// optional embedding cosine + RRF (k=60). Returns up to `limit` hydrated SubstrateHit rows.
 ///
@@ -22,10 +55,15 @@ pub async fn candidate_selection(
     query_embedding: Option<&[f32]>,
     limit: usize,
 ) -> Result<Vec<SubstrateHit>, String> {
+    // Sanitize the free-form query into a valid FTS5 MATCH expression. Contract bodies
+    // contain markdown headers (`#`), code fences, colons, etc. — every one of which is
+    // a reserved FTS5 syntax landmine.
+    let fts_query = sanitize_fts5_query(query);
+
     // FTS5 candidates with anchored_uuids JOIN — cousins excluded at SQL time.
     // SQLite IN-clause needs explicit placeholders; build them dynamically.
-    let mut scoped_rows: Vec<SubstrateNode> = if scope_uuids.is_empty() {
-        // No scope provided — skip the anchored JOIN entirely (treat as broad).
+    let mut scoped_rows: Vec<SubstrateNode> = if scope_uuids.is_empty() || fts_query.is_none() {
+        // No scope provided OR sanitization yielded zero tokens — skip the anchored JOIN.
         Vec::new()
     } else {
         let placeholders = std::iter::repeat_n("?", scope_uuids.len())
@@ -50,7 +88,7 @@ pub async fn candidate_selection(
             "#
         );
         let mut q = sqlx::query_as::<_, SubstrateNode>(&sql);
-        q = q.bind(query);
+        q = q.bind(fts_query.as_deref().unwrap());
         for u in scope_uuids {
             q = q.bind(u);
         }
@@ -61,26 +99,29 @@ pub async fn candidate_selection(
     };
 
     // Zero-hit fallback: if scoped JOIN returned <3, redo without the anchored JOIN.
+    // Skip the broad query too if sanitization left us with no tokens.
     let scope_used = if scoped_rows.len() < 3 {
-        scoped_rows = sqlx::query_as::<_, SubstrateNode>(
-            r#"
-            SELECT s.uuid, s.node_type, s.text, s.scope, s.applies_when,
-                   s.source_session_id, s.source_turn_ref, s.source_quote, s.source_actor,
-                   s.valid_at, s.invalid_at, s.expired_at, s.created_at,
-                   s.confidence, s.episode_id, s.invalidated_by, s.anchored_uuids
-            FROM substrate_nodes_fts fts
-            JOIN substrate_nodes s ON s.uuid = fts.uuid
-            WHERE substrate_nodes_fts MATCH ?
-              AND s.invalid_at IS NULL
-            ORDER BY fts.rank
-            LIMIT ?
-            "#,
-        )
-        .bind(query)
-        .bind((limit * 2) as i64)
-        .fetch_all(pool)
-        .await
-        .map_err(|e| format!("fts candidates (broad): {e}"))?;
+        if let Some(ref fq) = fts_query {
+            scoped_rows = sqlx::query_as::<_, SubstrateNode>(
+                r#"
+                SELECT s.uuid, s.node_type, s.text, s.scope, s.applies_when,
+                       s.source_session_id, s.source_turn_ref, s.source_quote, s.source_actor,
+                       s.valid_at, s.invalid_at, s.expired_at, s.created_at,
+                       s.confidence, s.episode_id, s.invalidated_by, s.anchored_uuids
+                FROM substrate_nodes_fts fts
+                JOIN substrate_nodes s ON s.uuid = fts.uuid
+                WHERE substrate_nodes_fts MATCH ?
+                  AND s.invalid_at IS NULL
+                ORDER BY fts.rank
+                LIMIT ?
+                "#,
+            )
+            .bind(fq)
+            .bind((limit * 2) as i64)
+            .fetch_all(pool)
+            .await
+            .map_err(|e| format!("fts candidates (broad): {e}"))?;
+        }
         ScopeUsed::Broad
     } else {
         ScopeUsed::Lineage
@@ -216,4 +257,65 @@ fn cosine(a: &[f32], b: &[f32]) -> f32 {
         return 0.0;
     }
     dot / (na.sqrt() * nb.sqrt())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sanitize_fts5_query;
+
+    #[test]
+    fn sanitizer_strips_markdown_header_hashes() {
+        // Reproduces the bug: contract bodies with `#` headers crashed FTS5 with
+        // "syntax error near "#"". Sanitizer must produce a valid MATCH expression.
+        let raw = "## Danger Zone\n\nDelete account button — hides destructive ops behind confirm.";
+        let q = sanitize_fts5_query(raw).expect("non-empty result");
+        assert!(!q.contains('#'), "no raw # allowed: {q}");
+        assert!(!q.contains('—'), "no em-dash allowed: {q}");
+        assert!(q.contains("\"danger\""), "contains phrase-quoted token: {q}");
+        assert!(q.contains(" OR "), "joins with OR: {q}");
+    }
+
+    #[test]
+    fn sanitizer_handles_fts5_metacharacters() {
+        // FTS5 reserved: " * : ^ ( ) - (leading) and a few others.
+        let raw = "foo:bar (baz)* ^qux \"hello\" -leading";
+        let q = sanitize_fts5_query(raw).expect("non-empty result");
+        // None of the metacharacters should appear OUTSIDE the phrase quotes.
+        // We strip them entirely before phrase-quoting, so the only `"` chars
+        // are the phrase-quote delimiters we added.
+        for tok in q.split(" OR ") {
+            assert!(tok.starts_with('"') && tok.ends_with('"'), "phrase-quoted: {tok}");
+            let inner = &tok[1..tok.len() - 1];
+            assert!(
+                inner.chars().all(|c| c.is_alphanumeric()),
+                "inner is alphanumeric only: {inner}"
+            );
+        }
+    }
+
+    #[test]
+    fn sanitizer_drops_short_tokens() {
+        let raw = "a be xyz hi";
+        let q = sanitize_fts5_query(raw).expect("non-empty result");
+        // "a", "be", "hi" are <3 chars; only "xyz" survives.
+        assert_eq!(q, "\"xyz\"");
+    }
+
+    #[test]
+    fn sanitizer_returns_none_for_empty_or_punctuation_only() {
+        assert!(sanitize_fts5_query("").is_none());
+        assert!(sanitize_fts5_query("# ## ###").is_none());
+        assert!(sanitize_fts5_query("a b c").is_none(), "short tokens drop too");
+    }
+
+    #[test]
+    fn sanitizer_caps_at_32_tokens() {
+        let raw = (0..50)
+            .map(|i| format!("token{i:03}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let q = sanitize_fts5_query(&raw).expect("non-empty");
+        let count = q.matches(" OR ").count() + 1;
+        assert_eq!(count, 32, "capped at 32 tokens");
+    }
 }
