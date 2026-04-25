@@ -334,4 +334,4 @@ Phases execute in numeric order; Phase 5 can run in parallel with Phase 3 after 
 | 10. Session Watcher + Filter Pipeline | 4/4 | Complete    | 2026-04-25 |
 | 11. Distiller + Constraint Store + Contract-Anchored Retrieval | 5/5 | Complete   | 2026-04-25 |
 | 12. Conflict / Supersession Engine | 4/4 | In Progress (12-04 Tasks 1+2 shipped; Task 3 UAT human-verify pending Yang sign-off) |  |
-| 13. Substrate UI + New Visual Model + Demo Polish | 2/12 | In Progress|  |
+| 13. Substrate UI + New Visual Model + Demo Polish | 3/12 | In Progress|  |
