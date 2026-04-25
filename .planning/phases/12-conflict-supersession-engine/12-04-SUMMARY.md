@@ -238,16 +238,59 @@ None during executor execution. The `CI_LLM_LIVE=1` harness runs and the UAT its
 
 None during executor execution. Tasks 1 + 2 + Task 3 deliverable all landed cleanly. Task 3 sign-off is paused (checkpoint:human-verify), pending Yang running through the UAT.
 
-## Adversarial Harness Numbers (to fill in post-UAT)
+## Adversarial Harness Numbers (captured 2026-04-25)
 
-These are the regression-detection numbers — every future harness re-run compares against these. The continuation agent (after Yang signs off the checkpoint) should patch in the actual values from the first passing run (or the median if 2-of-3-needed).
+These are the regression-detection numbers — every future harness re-run compares against these. Captured by orchestrator during automated UAT phase before Yang's checkpoint sign-off (see "UAT progress" section below).
 
-| Section | Metric | Target | Actual (run 1) | Actual (run 2 if needed) | Actual (run 3 if needed) |
-|---------|--------|--------|----------------|----------------|----------------|
-| SC1.1 fact harness | Recall | ≥ 0.80 | _to fill_ | _n/a if run 1 passed_ | _n/a if run 1 passed_ |
-| SC1.1 fact harness | Precision | ≥ 0.85 | _to fill_ | _n/a if run 1 passed_ | _n/a if run 1 passed_ |
-| SC2.1 intent harness | Match count | ≥ 8 / 10 | _to fill_ | _n/a if run 1 passed_ | _n/a if run 1 passed_ |
-| SC2.1 intent harness | d8 verdict | NEEDS_HUMAN_REVIEW or low-conf DRIFTED | _to fill_ | _n/a_ | _n/a_ |
+| Section | Metric | Target | Actual (run 1) | Notes |
+|---------|--------|--------|----------------|-------|
+| SC1.1 fact harness | Recall | ≥ 0.80 | **1.00 (5/5)** | All 5 fact-contradiction fixtures correctly identified on first run; no re-runs needed |
+| SC1.1 fact harness | Precision | ≥ 0.85 | **1.00 (5/5)** | Zero false positives across REST→gRPC, cache-30s→1s, JWT→OAuth, Redis→Postgres-MV, fire-forget→retry |
+| SC2.1 intent harness | Match count | ≥ 8 / 10 | **10/10** | Exceeds the 9/10 published baseline; reproduces every expected verdict |
+| SC2.1 intent harness | d8 verdict | NEEDS_HUMAN_REVIEW or low-conf DRIFTED | **NEEDS_HUMAN_REVIEW @ conf 0.50** | The adversarial-judgment-call test in evaluation.md hits the exact calibration point the prompt was designed for |
+
+**Per-decision results from SC2.1 (the moat):**
+
+| ID | Expected | Got | Confidence | Reasoning (LLM-emitted) |
+|----|----------|-----|------------|-------------------------|
+| d1 | DRIFTED | DRIFTED | 0.85 | Stale reads sacrifice correctness, which the new L0 prioritizes over convenience |
+| d2 | DRIFTED | DRIFTED | 0.80 | Skipping route-handler unit tests undermines reliability/correctness guarantees |
+| d3 | NOT_DRIFTED | NOT_DRIFTED | 0.95 | TS strict aligns with both ship-fast and correctness/reliability |
+| d4 | DRIFTED | DRIFTED | 0.95 | Manual laptop deploys lack reproducibility/observability |
+| d5 | NOT_DRIFTED | NOT_DRIFTED | 0.90 | Component library choice is priority-neutral re: reliability |
+| d6 | DRIFTED | DRIFTED | 0.95 | Letting errors propagate violates first-class graceful-degradation requirement |
+| d7 | NOT_DRIFTED | NOT_DRIFTED | 0.95 | Package-manager choice doesn't materially affect production reliability |
+| d8 | NEEDS_HUMAN_REVIEW | NEEDS_HUMAN_REVIEW | **0.50** | Single-region reduces availability vs. multi-region complexity — context-dependent |
+| d9 | NOT_DRIFTED | NOT_DRIFTED | 0.70 | ENV-var flags are simple and reliable; not in conflict with reliability |
+| d10 | DRIFTED | DRIFTED | 0.95 | Fire-and-forget without ack/retry sacrifices correctness/graceful-degradation |
+
+**Variance protocol:** First-run pass at perfect numbers; re-runs not needed. Future regressions: any single-run miss vs. these baselines is a real signal, NOT LLM variance.
+
+## UAT Progress (orchestrator-automated portion)
+
+Captured 2026-04-25 during `/gsd:execute-phase 12` orchestrator run, ahead of Yang's interactive UAT pass:
+
+| UAT Section | Status | Verified by |
+|-------------|--------|-------------|
+| Pre-UAT — `claude -p` auth | ✓ | `claude -p "ping"` returns "pong" |
+| Pre-UAT — default `cargo build --release` | ✓ | Compiles in 40.36s, clean |
+| Pre-UAT — `cargo build --release --features demo-fixture` | ✓ | Compiles in 44.22s, clean |
+| Pre-UAT — schema (4 tables, 9 indexes, 5 intent_drift_* columns) | ✓ | sqlite3 PRAGMA inspection |
+| **SC1.1** — fact adversarial harness | ✓ | Recall 1.00, Precision 1.00 (above) |
+| SC1.2 — manual contradiction round-trip | ⏳ pending | Requires running app + dev console |
+| **SC2.1** — intent adversarial harness | ✓ | 10/10 match, d8 = NEEDS_HUMAN_REVIEW @ 0.50 |
+| SC2.2 — manual cascade end-to-end | ⏳ pending | Requires running app + 4 IPC invocations |
+| SC3.1 — Phase 7 drift fires red pulse | ⏳ pending | Requires running app + file edit |
+| SC3.2 — Phase 8 rollup fires amber overlay | ⏳ pending | Requires running app + file edit |
+| SC3.3 — reconcile panel renders 3 actions | ⏳ pending | Requires running app + canvas click |
+| **SC3.4** — `cargo test --tests --release` (no LLM) | ✓ | 162+ non-ignored tests pass, 3 ignored (LLM-gated harnesses) |
+| Beat3.1 — default build refuses (source-level) | ✓ | `#[cfg(not(feature = "demo-fixture"))]` stub returns "built without the `demo-fixture` cargo feature" |
+| Beat3.2 — demo build runtime gate fires | ⏳ pending | Requires running app + non-demo repo |
+| Beat3.3 — demo build mutates state in demo repo | ⏳ pending | Requires running app + demo repo |
+| Beat3 dual-path engine rehearsal | ⏳ pending | Requires running app + Phase 13 UI |
+| Beat3 dual-path backstop rehearsal | ⏳ pending | Requires running app + Phase 13 UI |
+
+**Auto-verified subset:** the 4 load-bearing pieces (both LLM harnesses + plain test pass + dual-build cleanness + source-level Beat3.1) are GREEN. The remaining 9 items all require interactive app launch (Tauri dev console + canvas + file watcher + multi-repo state). Yang runs those during interactive UAT and types "approved" when complete.
 
 ## Demo Backstop Dual-Build Runbook (for Record Day)
 

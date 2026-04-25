@@ -491,15 +491,15 @@ When all 5 boxes are checked: type **"approved"** in the executor's checkpoint p
 
 ---
 
-## Variance numbers — fill on land
+## Variance numbers — captured 2026-04-25 (orchestrator-automated)
 
-Record the actual harness numbers from the first run that passes (whether first try or 2-of-3):
+Run 1 passed cleanly; no re-runs needed. Numbers preserved as the regression baseline.
 
-| Section | Metric | Target | Actual (run 1) | Actual (run 2) | Actual (run 3) |
-|---------|--------|--------|----------------|----------------|----------------|
-| SC1.1 fact harness | Recall | ≥ 0.80 | _to fill_ | _to fill_ | _to fill_ |
-| SC1.1 fact harness | Precision | ≥ 0.85 | _to fill_ | _to fill_ | _to fill_ |
-| SC2.1 intent harness | Match count | ≥ 8 / 10 | _to fill_ | _to fill_ | _to fill_ |
-| SC2.1 intent harness | d8 verdict | NEEDS_HUMAN_REVIEW or low-conf DRIFTED | _to fill_ | _to fill_ | _to fill_ |
+| Section | Metric | Target | Actual (run 1) |
+|---------|--------|--------|----------------|
+| SC1.1 fact harness | Recall | ≥ 0.80 | **1.00 (5/5)** |
+| SC1.1 fact harness | Precision | ≥ 0.85 | **1.00 (5/5)** |
+| SC2.1 intent harness | Match count | ≥ 8 / 10 | **10/10** |
+| SC2.1 intent harness | d8 verdict | NEEDS_HUMAN_REVIEW or low-conf DRIFTED | **NEEDS_HUMAN_REVIEW @ conf 0.50** |
 
-These numbers go into `12-04-SUMMARY.md` § "Adversarial harness numbers" so future regressions can be detected by comparison.
+Full per-decision verdict table is in `12-04-SUMMARY.md` § "Adversarial Harness Numbers".
