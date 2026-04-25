@@ -1,0 +1,20 @@
+{
+  "name": "day0-pkg-sqlite",
+  "version": "0.0.0",
+  "private": true,
+  "main": "src/index.js",
+  "bin": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "build": "pkg . --targets node20-macos-arm64 --output bin/day0-sqlite --compress Brotli"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.3.0"
+  },
+  "devDependencies": {
+    "pkg": "^5.8.1"
+  },
+  "pkg": {
+    "assets": ["node_modules/better-sqlite3/build/Release/better_sqlite3.node"]
+  }
+}
