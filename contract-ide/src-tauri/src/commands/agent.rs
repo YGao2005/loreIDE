@@ -31,6 +31,12 @@ impl Default for AgentRuns {
     }
 }
 
+/// Defaults tuned for the chat panel — favor low latency over reasoning depth.
+/// Override per-call by passing `model` / `effort` params from the frontend.
+/// Delegate code-gen path (commands/delegate.rs) opts up to sonnet + medium.
+const DEFAULT_AGENT_MODEL: &str = "haiku";
+const DEFAULT_AGENT_EFFORT: &str = "low";
+
 /// Run the claude CLI in `-p` (print) mode, streaming stdout via `agent:stream`
 /// events. On termination, parses the session JSONL and persists a receipt.
 ///
@@ -44,24 +50,55 @@ impl Default for AgentRuns {
 /// When true, appends `--bare` to the claude spawn args.
 /// All Phase 11 claude -p calls (planning + execute) pass bare=true via this param.
 /// Phase 8 chat panel callers omit the param (Tauri treats missing as None → false).
+///
+/// Latency tuning: optional `model` (alias like "haiku"/"sonnet"/"opus" or a
+/// full model id) and `effort` ("low"/"medium"/"high"/"xhigh"/"max" — the
+/// claude CLI's surfaced thinking-budget knob). Both default to the
+/// DEFAULT_AGENT_* constants above when None — chat callers get fast defaults
+/// without having to pass anything; delegate callers opt up explicitly.
 #[tauri::command]
 pub async fn run_agent(
     app: tauri::AppHandle,
     prompt: String,
     scope_uuid: Option<String>,
     bare: Option<bool>,
+    model: Option<String>,
+    effort: Option<String>,
 ) -> Result<String, String> {
     let bare = bare.unwrap_or(false);
+    let model = model.unwrap_or_else(|| DEFAULT_AGENT_MODEL.to_string());
+    let effort = effort.unwrap_or_else(|| DEFAULT_AGENT_EFFORT.to_string());
     let tracking_id = uuid::Uuid::new_v4().to_string();
 
+    eprintln!(
+        "[run_agent] tracking_id={} scope_uuid={:?} user_prompt={:?}",
+        tracking_id, scope_uuid, prompt
+    );
+
     // Assemble context-rich prompt from SQLite + sidecar reads (AGENT-01 invariant).
-    let assembled_prompt = crate::agent::prompt_assembler::assemble_prompt(
+    // Don't silently fall back on error — log the failure so we can see why scoping
+    // didn't work. Falling back to raw `prompt` strips scope context, which makes
+    // the agent answer as if no node were selected.
+    let assembled_prompt = match crate::agent::prompt_assembler::assemble_prompt(
         &app,
         &prompt,
         scope_uuid.as_deref(),
     )
     .await
-    .unwrap_or_else(|_| prompt.clone());
+    {
+        Ok(p) => {
+            eprintln!(
+                "[run_agent] assembled prompt ({} chars):\n----- BEGIN PROMPT -----\n{}\n----- END PROMPT -----",
+                p.len(),
+                p
+            );
+            p
+        }
+        Err(e) => {
+            eprintln!("[run_agent] assemble_prompt FAILED: {} — falling back to raw user prompt (NO SCOPE)", e);
+            prompt.clone()
+        }
+    };
 
     // Resolve the open repo path — the agent must run with cwd at the user's
     // repo so relative paths in code_ranges (`src/foo.tsx`) resolve correctly
@@ -111,6 +148,10 @@ pub async fn run_agent(
         "stream-json".to_string(),
         "--verbose".to_string(),
         "--dangerously-skip-permissions".to_string(),
+        "--model".to_string(),
+        model.clone(),
+        "--effort".to_string(),
+        effort.clone(),
     ];
     if bare {
         claude_args.push("--bare".to_string());

@@ -42,14 +42,29 @@ export interface AgentCompletePayload {
  * scope_uuid must be derived from useGraphStore(s => s.selectedNodeUuid)
  * (W4 — selectedNodeUuid IS the currently-zoomed node; the graph store
  * does NOT expose a separate currentZoomedNodeUuid field).
+ *
+ * Latency tuning (optional):
+ *   model — claude alias ("haiku" | "sonnet" | "opus") or full id. Defaults
+ *           to "haiku" (DEFAULT_AGENT_MODEL in agent.rs) for fast chat turns.
+ *   effort — claude `--effort` knob ("low" | "medium" | "high" | "xhigh" |
+ *            "max"). Surfaced equivalent of thinking-budget. Defaults to
+ *            "low" for chat. Bump for harder questions.
  */
+export interface RunAgentOptions {
+  model?: string;
+  effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+}
+
 export async function runAgent(
   prompt: string,
   scopeUuid: string | null,
+  options: RunAgentOptions = {},
 ): Promise<string> {
   return invoke<string>('run_agent', {
     prompt,
     scope_uuid: scopeUuid,
+    model: options.model,
+    effort: options.effort,
   });
 }
 

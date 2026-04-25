@@ -76,6 +76,12 @@ List the implicit decisions you made — defaults you picked that no substrate r
 
     // Reuse Phase 8's run_agent with bare=true (Phase 11 amendment).
     // Do NOT re-implement spawn/streaming/receipt logic — that all lives in Phase 8's agent.rs.
+    //
+    // Opt up to sonnet + medium effort: the chat panel's haiku/low defaults
+    // optimize for conversational latency, but delegate writes code and
+    // expects multi-file edits + decisions.json emission. Sonnet is the
+    // floor for that workload; medium effort lets it think through the plan
+    // without overshooting.
     let tracking_id = crate::commands::agent::run_agent(
         app,
         execute_prompt,
@@ -83,6 +89,8 @@ List the implicit decisions you made — defaults you picked that no substrate r
         // bare=false: --bare requires ANTHROPIC_API_KEY (OAuth keychain ignored).
         // Claude Code-only auth — accept 1-3s CLAUDE.md/MCP discovery overhead.
         Some(false),
+        Some("sonnet".to_string()),
+        Some("medium".to_string()),
     )
     .await?;
 
