@@ -82,7 +82,9 @@ Output ONLY a JSON object matching the schema. No commentary, no code, no edits.
                 "json",
                 "--json-schema",
                 &schema_str,
-                "--bare",
+                // --bare dropped: requires ANTHROPIC_API_KEY (OAuth keychain ignored).
+                // For Claude Code-only auth we accept the 1-3s CLAUDE.md/MCP discovery
+                // overhead. Pitfall 3 from plan 11-04 — revisit if demo timing slips.
             ])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

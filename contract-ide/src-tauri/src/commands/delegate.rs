@@ -80,7 +80,9 @@ List the implicit decisions you made — defaults you picked that no substrate r
         app,
         execute_prompt,
         Some(scope_uuid),
-        Some(true), // bare=true for all Phase 11 execute paths
+        // bare=false: --bare requires ANTHROPIC_API_KEY (OAuth keychain ignored).
+        // Claude Code-only auth — accept 1-3s CLAUDE.md/MCP discovery overhead.
+        Some(false),
     )
     .await?;
 

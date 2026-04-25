@@ -72,7 +72,12 @@ Output ONLY a JSON array of indices like [3, 7, 1, 5, 2]. No commentary."#,
     let prompt_owned = prompt;
     let output = tokio::task::spawn_blocking(move || -> Result<std::process::Output, String> {
         let mut child = Command::new("claude")
-            .args(["-p", "--output-format", "json", "--bare"])
+            .args([
+                "-p",
+                "--output-format",
+                "json",
+                // --bare dropped: see plan_review.rs. Claude Code-only auth path.
+            ])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
