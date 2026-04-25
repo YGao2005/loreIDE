@@ -163,7 +163,7 @@ commands::supersession::propagate_intent_drift_cmd,                 // 12-03 NEW
 1. **Task 1: walker.rs + intent_engine.rs (reverse rollup walker + propagate/preview)** — `4ff7005` (feat)
 2. **Task 2: Three intent-engine Tauri IPC commands + lib.rs registration** — `7917561` (feat)
 
-**Plan metadata commit:** to follow
+**Plan metadata commit:** `f0d9f23` — captured SUMMARY.md + STATE.md + ROADMAP.md + REQUIREMENTS.md updates. (Note: A repo-side pre-commit hook auto-committed the staged docs with a misleading message `docs(phase-09): complete phase execution` before the executor's intended `docs(12-03)` commit message could land. The content is correct — full SUMMARY landed at this hash. A separate one-liner `5e3430d fix(11-04): graceful contract-not-found error in delegate compose` also landed via the same hook for an unrelated 11-04 polish.)
 
 ## Files Created/Modified
 
