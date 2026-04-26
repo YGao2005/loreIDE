@@ -192,6 +192,11 @@ pub async fn distill_episode(app: &AppHandle, episode_id: &str) -> Result<usize,
     // 7. Idempotent upsert — stable UUID per (session_id, start_line, text-prefix-120).
     // sha256(session_id + ':' + start_line + ':' + text[:120]) hex[:24], prefixed 'substrate-'.
     let mut upserted = 0usize;
+    // Collect summaries for the substrate:nodes-added event payload that
+    // HarvestPanel (plan 13-09) consumes. Beat 4 of the live demo relies on
+    // this firing naturally when the user's Claude Code session distills new
+    // substrate — no manual trigger required.
+    let mut harvested_payload: Vec<serde_json::Value> = Vec::new();
     let now = chrono::Utc::now().to_rfc3339();
 
     for raw in &nodes_raw {
@@ -276,9 +281,30 @@ pub async fn distill_episode(app: &AppHandle, episode_id: &str) -> Result<usize,
         .map_err(|e| format!("upsert {uuid}: {e}"))?;
 
         upserted += 1;
+
+        // Build a HarvestPanel-shaped row for the substrate:nodes-added event.
+        // `name` is synthesized from the leading clause of `text` because the
+        // distiller LLM does not emit a separate label field (see prompt.rs);
+        // HarvestPanel renders this in the row header (mono blue) with the full
+        // `text` rendered as the italic quote underneath.
+        // `attached_to_uuid` uses the first anchored atom UUID — plan 13-09
+        // expects this to be a participant uuid for halo staging, but in the
+        // live (non-demo-fixture) path we plumb the most relevant atom anchor
+        // we have. Demo fixture (beat4-harvest.json) overrides via the
+        // dev-panel `emit_beat4_harvest` IPC.
+        let name_synth = derive_node_name(text);
+        let attached = anchored_uuids.first().cloned();
+        harvested_payload.push(serde_json::json!({
+            "uuid": uuid,
+            "name": name_synth,
+            "kind": node_type,
+            "text": text,
+            "promoted_from_implicit": false,
+            "attached_to_uuid": attached,
+        }));
     }
 
-    // 8. Emit substrate counter event — Plan 11-05 footer counter subscribes.
+    // 8a. Emit substrate counter event — Plan 11-05 footer counter subscribes.
     app.emit(
         "substrate:ingested",
         serde_json::json!({
@@ -288,6 +314,14 @@ pub async fn distill_episode(app: &AppHandle, episode_id: &str) -> Result<usize,
         }),
     )
     .ok();
+
+    // 8b. Emit substrate:nodes-added — HarvestPanel (plan 13-09) consumes this
+    // to slide its bottom-right notification panel in during Beat 4 of the
+    // live demo. Only emit when at least one node was upserted; emitting an
+    // empty array would cause HarvestPanel to harmlessly no-op but is noise.
+    if !harvested_payload.is_empty() {
+        app.emit("substrate:nodes-added", &harvested_payload).ok();
+    }
 
     Ok(upserted)
 }
@@ -359,6 +393,40 @@ async fn write_dead_letter(
     Ok(())
 }
 
+/// Synthesize a short display name from a substrate node's `text`.
+///
+/// HarvestPanel (plan 13-09) renders `name` as the row header (mono blue) and
+/// `text` as the italic quote underneath. The distiller LLM does not emit a
+/// separate label field, so we derive one: take the leading clause (split on
+/// the first comma, period, em-dash, or semicolon), then truncate to ~60 chars
+/// at a word boundary so the panel doesn't overflow. Empty input returns "".
+fn derive_node_name(text: &str) -> String {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+    // Split on the first sentence-ish boundary. `—` is the em-dash; matching by
+    // bytes is fine because all delimiters are ASCII.
+    let head_end = trimmed
+        .find(['.', ',', ';', '\n'])
+        .or_else(|| trimmed.find(" — "))
+        .or_else(|| trimmed.find(" - "))
+        .unwrap_or(trimmed.len());
+    let head = &trimmed[..head_end];
+    const MAX: usize = 60;
+    if head.chars().count() <= MAX {
+        return head.trim().to_string();
+    }
+    // Truncate at a word boundary near MAX to avoid mid-word cuts.
+    let mut end = 0usize;
+    for (idx, _) in head.char_indices().take(MAX) {
+        end = idx;
+    }
+    let cut = &head[..end];
+    let cut = cut.rsplit_once(' ').map(|(a, _)| a).unwrap_or(cut);
+    format!("{}…", cut.trim())
+}
+
 /// Subscribe to Phase 10's episode:ingested event. Called from lib.rs setup().
 ///
 /// On receipt of an `episode:ingested` payload `{ episode_id, session_id }`,
@@ -385,4 +453,44 @@ pub fn init(app: &AppHandle) {
             }
         });
     });
+}
+
+#[cfg(test)]
+mod derive_node_name_tests {
+    use super::derive_node_name;
+
+    #[test]
+    fn empty_input_returns_empty() {
+        assert_eq!(derive_node_name(""), "");
+        assert_eq!(derive_node_name("   "), "");
+    }
+
+    #[test]
+    fn splits_on_first_period() {
+        assert_eq!(
+            derive_node_name("Always canonicalize file paths. Even on Windows."),
+            "Always canonicalize file paths"
+        );
+    }
+
+    #[test]
+    fn splits_on_first_comma() {
+        assert_eq!(
+            derive_node_name("Use soft delete, not hard delete"),
+            "Use soft delete"
+        );
+    }
+
+    #[test]
+    fn truncates_long_clause_at_word_boundary() {
+        let long = "This is a very long single clause without any sentence break that runs on forever";
+        let name = derive_node_name(long);
+        assert!(name.ends_with('…'), "expected ellipsis, got {name}");
+        assert!(name.chars().count() <= 62, "got {} chars", name.chars().count());
+    }
+
+    #[test]
+    fn short_clause_unchanged() {
+        assert_eq!(derive_node_name("Revoke tokens"), "Revoke tokens");
+    }
 }
