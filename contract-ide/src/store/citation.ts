@@ -44,6 +44,21 @@ interface CitationState {
   closeCitation: () => void;
   /** Clear the halo immediately (cancels any pending auto-clear timeout). */
   clearHighlight: () => void;
+  /**
+   * Phase 15 Plan 03 — optional callback fired by SourceArchaeologyModal AFTER
+   * a successful refine, BEFORE re-pointing openCitationUuid to the new chain head.
+   *
+   * Receives the ORIGINAL uuid (the rule that was refined, not the new chain head).
+   *
+   * Producers (e.g., VerifierPanel from plan 15-06) set this at modal-open time
+   * to receive a commit-handshake — direct callback over post-hoc inference.
+   * Cleared on closeCitation so stale producers cannot fire on unrelated refines.
+   *
+   * Cmd+P substrate hits (plan 15-02) leave this null — refining through that
+   * entry point has no side-effects on any panel state.
+   */
+  onRefineSuccess: ((originalUuid: string) => void) | null;
+  setOnRefineSuccess: (cb: ((originalUuid: string) => void) | null) => void;
 }
 
 export const useCitationStore = create<CitationState>((set) => {
@@ -51,6 +66,7 @@ export const useCitationStore = create<CitationState>((set) => {
   return {
     highlightedUuid: null,
     openCitationUuid: null,
+    onRefineSuccess: null,
     highlight: (uuid, durationMs = 2000) => {
       if (timeoutHandle) clearTimeout(timeoutHandle);
       set({ highlightedUuid: uuid });
@@ -60,11 +76,16 @@ export const useCitationStore = create<CitationState>((set) => {
       }, durationMs);
     },
     openCitation: (uuid) => set({ openCitationUuid: uuid }),
-    closeCitation: () => set({ openCitationUuid: null }),
+    closeCitation: () =>
+      // Clear onRefineSuccess on every modal close — defensive: ensures a
+      // stale producer (e.g., VerifierPanel that unmounted without closing
+      // the modal) cannot fire its callback on the next unrelated refine.
+      set({ openCitationUuid: null, onRefineSuccess: null }),
     clearHighlight: () => {
       if (timeoutHandle) clearTimeout(timeoutHandle);
       set({ highlightedUuid: null });
       timeoutHandle = null;
     },
+    setOnRefineSuccess: (cb) => set({ onRefineSuccess: cb }),
   };
 });
