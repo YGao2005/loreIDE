@@ -1,6 +1,8 @@
 /**
  * Phase 13 Plan 07 — Source-archaeology modal.
  * Phase 15 Plan 03 — Extended with Detail/History tabs + Refine path (TRUST-02).
+ * Phase 15 Plan 04 — Extended with Delete path (TRUST-03): Delete this rule button
+ *   opens DeleteRuleConfirmDialog; on success closes modal + fires DOM toast.
  *
  * Renders the verbatim-quote + provenance metadata for a substrate node when
  * a user clicks a `[source]` citation pill. Opens via
@@ -23,6 +25,16 @@
  *   - After Save: fires onRefineSuccess(originalUuid) commit-handshake FIRST,
  *     then re-points modal to new chain head, then switches to History tab
  *   - useCitationStore.onRefineSuccess callback contract for plan 15-06 VerifierPanel
+ *
+ * Phase 15 Plan 04 additions:
+ *   - "Delete this rule" button (destructive variant) in header alongside Refine
+ *   - DeleteRuleConfirmDialog opened on click with reason picker + impact preview
+ *   - On successful delete: DOM toast "Rule tombstoned — N atoms previously cited it"
+ *     (uses project DOM-toast pattern from AppShell, bottom-right position, clear
+ *     of the sidebar status indicator which is on the LEFT side)
+ *   - Modal closes after delete (closeCitation)
+ *   - Toast position: bottom-right — sidebar SubstrateStatusIndicator is on the left,
+ *     so bottom-right is unobstructed. Matches AppShell source:click DOM toast style.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -39,6 +51,7 @@ import {
 } from '@/ipc/substrate';
 import { RefineRuleEditor } from './RefineRuleEditor';
 import { SubstrateRuleHistoryTab } from './SubstrateRuleHistoryTab';
+import { DeleteRuleConfirmDialog } from './DeleteRuleConfirmDialog';
 
 type ActiveTab = 'detail' | 'history';
 
@@ -51,6 +64,7 @@ export function SourceArchaeologyModal() {
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>('detail');
   const [refining, setRefining] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   // Stable ref to the uuid at the time Refine was entered — needed for the
   // onRefineSuccess commit-handshake (must fire with the ORIGINAL uuid, not
@@ -63,6 +77,7 @@ export function SourceArchaeologyModal() {
       setDetail(null);
       setRefining(false);
       setActiveTab('detail');
+      setDeleteDialogOpen(false);
       originalUuidRef.current = null;
       return;
     }
@@ -70,6 +85,7 @@ export function SourceArchaeologyModal() {
     // refining + tab state so we land on Detail with a clean slate.
     setRefining(false);
     setActiveTab('detail');
+    setDeleteDialogOpen(false);
     let cancelled = false;
     setLoading(true);
     setDetail(null);
@@ -157,7 +173,51 @@ export function SourceArchaeologyModal() {
     setActiveTab('history');
   }
 
+  // ── Phase 15 Plan 04 — Delete handlers ─────────────────────────────────────
+
+  function handleDeleteButtonClick() {
+    setDeleteDialogOpen(true);
+  }
+
+  function handleDeleteCancel() {
+    setDeleteDialogOpen(false);
+  }
+
+  function handleDeleteConfirmed(atomCount: number) {
+    // Close the confirm dialog
+    setDeleteDialogOpen(false);
+    // Close the modal — user has tombstoned the rule, no more detail to show
+    close();
+    // Fire DOM toast (project uses inline DOM toast pattern — no toast library installed).
+    // Position: bottom-right — sidebar SubstrateStatusIndicator is on the LEFT side,
+    // so bottom-right is unobstructed. Toast style matches AppShell source:click toast.
+    const el = document.createElement('div');
+    el.textContent = `Rule tombstoned — ${atomCount} ${atomCount === 1 ? 'atom' : 'atoms'} previously cited it`;
+    el.style.cssText = [
+      'position:fixed',
+      'bottom:2.5rem',
+      'right:2rem',
+      'background:var(--background,#1a1a1a)',
+      'color:var(--foreground,#fff)',
+      'border:1px solid var(--destructive,#e53e3e)',
+      'border-radius:6px',
+      'padding:8px 14px',
+      'font-size:11px',
+      'font-family:var(--font-geist-sans,sans-serif)',
+      'z-index:9999',
+      'pointer-events:none',
+      'opacity:1',
+      'transition:opacity 0.3s ease',
+    ].join(';');
+    document.body.appendChild(el);
+    setTimeout(() => {
+      el.style.opacity = '0';
+      setTimeout(() => el.remove(), 350);
+    }, 3500);
+  }
+
   return (
+    <>
     <Dialog open={Boolean(openUuid)} onOpenChange={(o) => !o && close()}>
       <DialogContent className="max-w-2xl sm:max-w-2xl">
         <DialogHeader>
@@ -165,18 +225,31 @@ export function SourceArchaeologyModal() {
             <DialogTitle className="font-mono text-sm break-all">
               {detail?.name ?? openUuid ?? 'Substrate citation'}
             </DialogTitle>
-            {/* Refine button — only shown when on Detail tab and not already refining */}
+            {/* Action buttons — only shown when on Detail tab and not already refining */}
             {openUuid && !refining && (
-              <button
-                onClick={handleRefineButtonClick}
-                className="flex shrink-0 items-center gap-1 rounded border border-border
-                           px-2 py-1 text-[11px] text-muted-foreground transition-colors
-                           hover:border-foreground/30 hover:text-foreground"
-                title="Refine this rule (⌘E)"
-              >
-                Refine
-                <kbd className="rounded bg-muted/50 px-1 py-0.5 font-mono text-[10px]">⌘E</kbd>
-              </button>
+              <div className="flex shrink-0 items-center gap-1.5">
+                {/* Refine button */}
+                <button
+                  onClick={handleRefineButtonClick}
+                  className="flex items-center gap-1 rounded border border-border
+                             px-2 py-1 text-[11px] text-muted-foreground transition-colors
+                             hover:border-foreground/30 hover:text-foreground"
+                  title="Refine this rule (⌘E)"
+                >
+                  Refine
+                  <kbd className="rounded bg-muted/50 px-1 py-0.5 font-mono text-[10px]">⌘E</kbd>
+                </button>
+                {/* Delete button — destructive, paired with Refine */}
+                <button
+                  onClick={handleDeleteButtonClick}
+                  className="flex items-center gap-1 rounded border border-destructive/40
+                             px-2 py-1 text-[11px] text-destructive/70 transition-colors
+                             hover:border-destructive hover:text-destructive"
+                  title="Delete this rule"
+                >
+                  Delete
+                </button>
+              </div>
             )}
           </div>
         </DialogHeader>
@@ -323,5 +396,15 @@ export function SourceArchaeologyModal() {
         </div>
       </DialogContent>
     </Dialog>
+
+    {/* Delete confirmation dialog — rendered outside the main Dialog to avoid nesting issues */}
+    {deleteDialogOpen && openUuid && (
+      <DeleteRuleConfirmDialog
+        uuid={openUuid}
+        onConfirmed={handleDeleteConfirmed}
+        onCancel={handleDeleteCancel}
+      />
+    )}
+  </>
   );
 }
