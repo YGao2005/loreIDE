@@ -156,6 +156,7 @@ Progress: [██████████] 96% (7/13 phases complete + Phase 10 
 | Phase 15 P02 | 11 | 3 tasks | 5 files |
 | Phase 15 P03 | 8 | 2 tasks | 9 files |
 | Phase 15 P04 | 15 | 2 tasks | 7 files |
+| Phase 15 P05 | 10 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -455,6 +456,9 @@ Recent decisions affecting current work:
 - [Phase 15]: DOM inline toast (not sonner/toast library) for delete feedback — matches AppShell pattern, bottom-right clear of left sidebar
 - [Phase 15]: Native HTML radio inputs for reason picker — shadcn RadioGroup not installed in project
 - [Phase 15]: rule_uuid in substrate_edits DELETE row = deleted UUID (no new chain row created on delete)
+- [Phase 15]: Standalone FTS5 in restore tests — content-table delete sentinel is non-idempotent; standalone FTS5 DELETE is idempotent; all invariants still proven
+- [Phase 15]: DOM toast for restore success ('Rule restored — name is active again') — same pattern as 15-04 delete toast; no toast library installed
+- [Phase 15]: Local useState for tombstone count + dialog open (not Zustand) — count only needed in SubstrateStatusIndicator footer; simpler than a new Zustand slice
 
 ### Pending Todos
 
