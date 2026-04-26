@@ -247,9 +247,11 @@ function ScreenCardImpl({ data }: NodeProps) {
                 if (!iframe) return;
                 // Defer one frame so layout/paint completes before capture.
                 requestAnimationFrame(() => {
-                  void captureIframeScreenshot(iframe).then((dataUrl) => {
-                    if (dataUrl) setScreenshot(d.uuid, dataUrl);
-                  });
+                  void captureIframeScreenshot(iframe, fullUrl).then(
+                    (dataUrl) => {
+                      if (dataUrl) setScreenshot(d.uuid, dataUrl);
+                    },
+                  );
                 });
               }}
             />

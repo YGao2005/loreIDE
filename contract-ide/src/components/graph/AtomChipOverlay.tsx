@@ -101,7 +101,13 @@ export function AtomChipOverlay({ iframeRef, parentUuid }: AtomChipOverlayProps)
 
     let cancelled = false;
     const refresh = async () => {
-      const rects = await requestChipRects(iframe);
+      // Pass the atom uuids the responder should measure. The responder
+      // (contract-ide-demo/public/contract-chip-responder.js) only picks
+      // elements whose `data-contract-uuid` is in this set.
+      const uuids = atoms.map((a) => a.uuid);
+      const rects = uuids.length > 0
+        ? await requestChipRects(iframe, uuids)
+        : [];
       if (cancelled) return;
       // Join rects with atom display names by uuid. If an atom has no
       // matching JSX element in the iframe, it doesn't appear in `rects`

@@ -1,34 +1,52 @@
 /**
- * Phase 13 Plan 05 — CHIP-01: postMessage protocol for parent ↔ iframe rect queries.
+ * Phase 13 Plan 05/06 — CHIP-01: postMessage protocol for parent ↔ iframe
+ * rect queries.
  *
- * The iframe (loaded from localhost — same origin per Plan 04-03 frame-src CSP
- * which allows `http://localhost:* http://127.0.0.1:*`) should respond to a
- * `request-chip-rects` message with positions of all `[data-contract-uuid]`
- * elements. The Babel/SWC plugin (Phase 9 BABEL-01) injects those attributes
- * onto JSX elements matching contract `code_ranges`.
+ * The previous implementation tried `iframe.contentDocument` direct DOM access
+ * first and only used postMessage as a "fallback." That approach worked when
+ * the IDE and the demo were both served from `tauri://localhost` (same origin),
+ * but the actual demo runtime is:
  *
- * Two paths, in order:
+ *   IDE   → http://localhost:1420  (Vite dev server, the Tauri WebView host)
+ *   demo  → http://localhost:3000  (Next.js dev server, loaded in iframe)
  *
- *   1) Same-origin direct DOM access via `iframe.contentDocument`. This works
- *      today for localhost dev (Plan 04-03 CSP allows http://localhost:*) and
- *      doesn't require any iframe-side responder. This is the canonical path
- *      for the demo because the user's Next.js dev server runs on localhost.
+ * Different ports = different origins under the same-origin policy. Reading
+ * `iframe.contentDocument` (or even *catching* the SecurityError thrown by
+ * the getter) trips DOMException logging in Chromium-based WebViews and
+ * produces a flood of red console errors in the demo runbook. Worse, on
+ * stricter WebKit builds the SecurityError is observable as an unhandled
+ * exception even when wrapped in try/catch.
  *
- *   2) `postMessage('request-chip-rects')` fallback for cross-origin iframes
- *      (e.g. a future scenario serves the preview from a CDN). The iframe-side
- *      responder must register a listener that posts back a `ChipRectMessage`.
- *      Plan 13-05 ships only the parent-side query; the iframe-side responder
- *      is out of scope (would be wired by a Phase 9 follow-up).
+ * Resolution: postMessage is the *only* path. The iframe-side responder lives
+ * in the demo project (`contract-ide-demo/public/contract-chip-responder.js`,
+ * loaded from the root layout) and answers `contract-ide:request-rects`
+ * messages with `contract-ide:rects` replies.
  *
- *   3) If both paths fail (cross-origin SecurityError + postMessage timeout),
- *      return an empty array. The caller (AtomChipOverlay) renders a
- *      chip-less iframe — still useful for layout, just no chip overlay.
+ * Protocol:
  *
- * The returned rects are NORMALISED to iframe-local coordinates: the chip's
- * `top: rect.top` is its position relative to the iframe's top-left corner,
- * NOT the window's top-left. AtomChipOverlay positions chips inside an
- * absolutely-positioned div whose `inset-0` matches the iframe's bounding box,
- * so iframe-local coordinates are exactly what the chip needs.
+ *   parent → iframe   { type: 'contract-ide:request-rects', uuids, requestId }
+ *   iframe → parent   { type: 'contract-ide:rects',         requestId, rects }
+ *
+ *   - `requestId` is a per-call nonce so concurrent requests don't cross-talk.
+ *     Late replies whose requestId no longer matches an outstanding request
+ *     are ignored.
+ *   - `uuids` is the set of atom uuids the parent wants positions for. The
+ *     responder only measures elements matching `[data-contract-uuid="<uuid>"]`,
+ *     skipping unrelated DOM nodes.
+ *   - `event.source !== iframe.contentWindow` guards against unrelated
+ *     postMessage chatter (devtools, browser extensions, other iframes).
+ *
+ * Failure modes (all return [] gracefully — UI degrades to "no chips"):
+ *   - No contentWindow (iframe not loaded yet)            → []
+ *   - 500ms timeout (responder script not loaded)         → []
+ *   - requestId mismatch (stale reply)                    → ignored, eventual []
+ *   - wrong source                                         → ignored, eventual []
+ *
+ * The returned rects are NORMALISED to iframe-local coordinates by the
+ * iframe-side responder (it returns `getBoundingClientRect` values which ARE
+ * already iframe-local because they're measured inside the iframe's own
+ * window). The parent overlay container is `absolute inset-0` over the iframe
+ * so iframe-local coordinates land at the right place.
  */
 
 export interface ChipRect {
@@ -36,85 +54,126 @@ export interface ChipRect {
   rect: { top: number; left: number; width: number; height: number };
 }
 
-export interface ChipRectMessage {
-  type: 'chip-rects';
-  rects: ChipRect[];
+interface RectsMessage {
+  type: 'contract-ide:rects';
+  requestId: string;
+  rects: Array<{
+    uuid: string;
+    rect: {
+      x?: number;
+      y?: number;
+      top?: number;
+      left?: number;
+      width: number;
+      height: number;
+    };
+  }>;
+}
+
+const REQUEST_TYPE = 'contract-ide:request-rects';
+const RESPONSE_TYPE = 'contract-ide:rects';
+const DEFAULT_TIMEOUT_MS = 500;
+
+let requestCounter = 0;
+function nextRequestId(): string {
+  // Prefer crypto.randomUUID when available (Tauri WebView has it). Fall back
+  // to a monotonic counter so node-environment tests that don't ship crypto
+  // still get unique ids.
+  const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
+  if (c?.randomUUID) return c.randomUUID();
+  requestCounter += 1;
+  return `chip-req-${Date.now()}-${requestCounter}`;
 }
 
 /**
- * Query the iframe DOM for all elements with `data-contract-uuid` and return
- * their bounding rects in iframe-local coordinates.
+ * Ask the iframe for the bounding rects of the elements matching the given
+ * atom uuids.
  *
- * @param iframe     The iframe element to query.
- * @param timeoutMs  postMessage fallback timeout. Default 250ms — fast enough
- *                   that the user perceives the chip as "appearing with the
- *                   page," not "appearing after a delay."
- * @returns          Array of ChipRect; empty array on cross-origin failure
- *                   AND postMessage timeout (no exception thrown — caller
- *                   doesn't need to defend against rejection).
+ * @param iframe     The iframe element to query. Must have a `contentWindow`
+ *                   (i.e. be attached to the document and loaded).
+ * @param uuids      The atom uuids to request rects for. The responder only
+ *                   measures elements whose `data-contract-uuid` is in this
+ *                   set.
+ * @param timeoutMs  How long to wait for a reply before resolving with [].
+ *                   Default 500ms — long enough that the responder has a
+ *                   reasonable chance to reply even on a slow first paint,
+ *                   short enough that a missing responder doesn't block the
+ *                   chip overlay rendering empty for visibly-long.
+ * @returns          ChipRect[] on success; [] on any failure mode (no
+ *                   contentWindow, timeout, mismatched requestId, etc.).
+ *                   Never throws — caller doesn't need to defend against
+ *                   rejection.
  */
 export async function requestChipRects(
   iframe: HTMLIFrameElement,
-  timeoutMs = 250,
+  uuids: string[],
+  timeoutMs: number = DEFAULT_TIMEOUT_MS,
 ): Promise<ChipRect[]> {
-  // Path 1: same-origin direct DOM access.
-  // This is the preferred path because (a) zero protocol coordination needed —
-  // works today against any localhost dev server with no iframe-side script,
-  // and (b) it returns synchronously rather than racing a postMessage timeout.
-  try {
-    const doc = iframe.contentDocument;
-    if (doc) {
-      const elems = doc.querySelectorAll<HTMLElement>('[data-contract-uuid]');
-      const rects: ChipRect[] = [];
-      const iframeRect = iframe.getBoundingClientRect();
-      elems.forEach((el) => {
-        const r = el.getBoundingClientRect();
-        const uuid = el.getAttribute('data-contract-uuid');
-        if (!uuid) return;
-        rects.push({
-          uuid,
-          // Translate window-relative element rect into iframe-local
-          // coordinates so the absolutely-positioned chip in the parent
-          // overlay container (which itself is absolute-inset-0 over the
-          // iframe) lands at the right spot.
-          rect: {
-            top: r.top - iframeRect.top,
-            left: r.left - iframeRect.left,
-            width: r.width,
-            height: r.height,
-          },
-        });
-      });
-      return rects;
-    }
-  } catch {
-    // SecurityError (cross-origin): fall through to the postMessage path.
-    // We swallow rather than rethrow because the caller doesn't care WHY the
-    // direct path failed — it just needs the postMessage attempt to run.
-  }
+  // Guard 1: no contentWindow → iframe not attached / not loaded. We can't
+  // postMessage anywhere, so resolve [] immediately without registering a
+  // listener (avoids leaking the listener across the eventual timeout).
+  const target = iframe.contentWindow;
+  if (!target) return [];
 
-  // Path 2: postMessage fallback. The iframe-side responder must register a
-  // 'message' listener for `{ type: 'request-chip-rects' }` and post back a
-  // `ChipRectMessage`. Plan 13-05 ships only the parent half; the iframe half
-  // is out of scope (would be wired by a Phase 9 follow-up if cross-origin
-  // previews ever ship).
+  const requestId = nextRequestId();
+
   return new Promise<ChipRect[]>((resolve) => {
-    const handle = setTimeout(() => {
+    let settled = false;
+    const finish = (value: ChipRect[]) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutHandle);
       window.removeEventListener('message', listener);
-      resolve([]);
-    }, timeoutMs);
-    const listener = (e: MessageEvent) => {
-      // Only accept responses from THIS iframe — guards against unrelated
-      // postMessage chatter (e.g. devtools, browser extensions).
-      if (e.source !== iframe.contentWindow) return;
-      const data = e.data as ChipRectMessage;
-      if (data?.type === 'chip-rects' && Array.isArray(data.rects)) {
-        clearTimeout(handle);
-        window.removeEventListener('message', listener);
-        resolve(data.rects);
-      }
+      resolve(value);
     };
+
+    const listener = (e: MessageEvent) => {
+      // Source guard: ignore messages from any window other than this
+      // iframe's contentWindow. Without this guard, a sibling iframe (or a
+      // browser extension) posting `contract-ide:rects` could spoof a reply.
+      if (e.source !== target) return;
+      const data = e.data as Partial<RectsMessage> | null | undefined;
+      if (!data || data.type !== RESPONSE_TYPE) return;
+      // requestId guard: a stale reply from a previous call (where the
+      // iframe answered late, after this call's timeout fired or after a
+      // newer call superseded it) must not resolve THIS promise. Falling
+      // through means the eventual timeout triggers an empty resolve.
+      if (data.requestId !== requestId) return;
+      if (!Array.isArray(data.rects)) {
+        finish([]);
+        return;
+      }
+      const normalised: ChipRect[] = data.rects
+        .filter((r) => r && typeof r.uuid === 'string' && r.rect)
+        .map((r) => ({
+          uuid: r.uuid,
+          rect: {
+            // Responder may serialize as either {x,y} (DOMRect.toJSON-style)
+            // or {top,left}. Accept both; prefer top/left since that's what
+            // CSS positioning consumes.
+            top: r.rect.top ?? r.rect.y ?? 0,
+            left: r.rect.left ?? r.rect.x ?? 0,
+            width: r.rect.width,
+            height: r.rect.height,
+          },
+        }));
+      finish(normalised);
+    };
+
+    const timeoutHandle = setTimeout(() => {
+      // Responder didn't reply (script not loaded? wrong message type
+      // filter?). Resolve with [] so the overlay renders no chips rather
+      // than hanging the caller forever.
+      finish([]);
+    }, timeoutMs);
+
     window.addEventListener('message', listener);
-    iframe.contentWindow?.postMessage({ type: 'request-chip-rects' }, '*');
+
+    // Use '*' as the targetOrigin because the iframe origin is whatever the
+    // user's dev server runs on (localhost:3000 in the standard demo, but
+    // could differ). The responder validates the message TYPE which is the
+    // real authentication; the targetOrigin is just an extra layer that
+    // would only matter for confidential payloads (atom uuids aren't secret).
+    target.postMessage({ type: REQUEST_TYPE, uuids, requestId }, '*');
   });
 }

@@ -1,83 +1,104 @@
 /**
- * Phase 13 Plan 06 — Same-origin iframe screenshot capture.
+ * Phase 13 Plan 06 — Iframe screenshot capture with graceful cross-origin
+ * fallback.
  *
- * Captures a live iframe's rendered content as a PNG data URL by serializing
- * the iframe's contentDocument into an inline SVG `foreignObject`, drawing
- * the SVG to a canvas, and reading the canvas back as a data URL. This is
- * the standard html2canvas trick without the dependency weight.
+ * Capture order:
  *
- * Why same-origin only:
- *   - Phase 4 Plan 04-03's `frame-src http://localhost:* http://127.0.0.1:*`
- *     CSP makes localhost iframes same-origin under Tauri's WebView, so
- *     `iframe.contentDocument` is reachable without throwing SecurityError.
- *   - Cross-origin iframes throw on contentDocument access — no canvas
- *     trickery can recover that. For cross-origin scenarios we'd need a
- *     Tauri-side native screenshot (capture_route_screenshot stub in
- *     commands/screenshot.rs) — deferred until needed.
+ *   1. Tauri IPC `capture_route_screenshot` (currently a stub that returns
+ *      Err — the JS layer treats Err as "skip me, try the next path").
+ *      Future native implementation would render the route headlessly via
+ *      CGDisplay / WKWebView and return a PNG data URL.
  *
- * Performance budget per ROADMAP iframe perf budget: ≤120ms capture. Tested
- * on the demo's `app/account/settings/page.tsx` shape (~30 DOM nodes,
- * ~2 stylesheets) the capture completes in 30-60ms on typical hardware.
+ *   2. Same-origin SVG-foreignObject canvas trick. Serializes the iframe's
+ *      `contentDocument` into an SVG, draws to canvas, reads as data URL.
+ *      Only works for same-origin iframes — accessing `contentDocument` on
+ *      a cross-origin iframe throws SecurityError, which we catch and
+ *      treat as "no screenshot."
  *
- * Tainted-canvas fallback: if the iframe loads any cross-origin resource
- * (image from CDN, font from Google Fonts, etc.) the resulting canvas is
- * "tainted" and `toDataURL()` throws SecurityError. We catch this and
- * return null, signaling the caller to either retry without the tainted
- * resource or fall back to the Tauri-side IPC.
+ *   3. Return null. Caller (ScreenCard) renders a placeholder. NEVER throws.
  *
- * Plan 13-06 contract: only ScreenCard's focused-iframe `load` handler
- * calls this; non-focused ScreenCards just read from useScreenshotStore.
- * If the capture fails (returns null), the non-focused card falls back to
- * a "capturing…" placeholder; eventually the next focus cycle re-captures.
+ * Why a graceful null return instead of throwing:
+ *   The IDE runs on `localhost:1420` and the demo on `localhost:3000`.
+ *   Different ports = different origins. The DOM-serialization path will
+ *   ALWAYS hit SecurityError in the demo runtime. Throwing would crash
+ *   ScreenCard's onLoad handler; returning null lets the card render the
+ *   "Capturing screenshot…" placeholder for non-focused twins. The user-
+ *   facing behavior is identical for the focused-twin case (it shows the
+ *   live iframe regardless of screenshot state).
+ *
+ * Performance budget: ≤120ms when path 2 succeeds. Path 1 (when implemented)
+ * should target the same budget. Path 3 (placeholder) is instant.
  */
+
+import { invoke } from '@tauri-apps/api/core';
 
 const PERF_BUDGET_MS = 120;
 
 /**
  * Capture an iframe's rendered content as a PNG data URL.
  *
- * @param iframe   The iframe element to capture. Must be loaded (its
- *                 contentDocument must be queryable).
- * @returns PNG data URL on success, null on any failure (cross-origin
- *          taint, no contentDocument, image-load error, etc.).
+ * @param iframe   The iframe element. Used for the same-origin canvas
+ *                 fallback (path 2). May still be null'd by the caller; we
+ *                 defensively check before touching `.contentDocument`.
+ * @param url      The full URL the iframe is loaded at (e.g.
+ *                 'http://localhost:3000/account/settings'). Passed to the
+ *                 Tauri IPC so the native side can render the same route
+ *                 headlessly. The IPC currently returns Err; this argument
+ *                 is forward-compatible with the eventual implementation.
+ * @returns        PNG data URL on success, null on any failure. Never throws.
  */
 export async function captureIframeScreenshot(
-  iframe: HTMLIFrameElement,
+  iframe: HTMLIFrameElement | null,
+  url: string,
 ): Promise<string | null> {
-  const start =
-    typeof performance !== 'undefined' && typeof performance.now === 'function'
-      ? performance.now()
-      : Date.now();
+  const start = perfNow();
 
+  // Path 1: Tauri-side native screenshot. Currently STUB — returns Err which
+  // we catch and fall through. When implemented, this path handles
+  // cross-origin iframes (the only path that can; the canvas trick can't
+  // touch a cross-origin contentDocument).
   try {
-    const doc = iframe.contentDocument;
-    if (!doc) {
-      // Either the iframe hasn't loaded yet (no Document available) or the
-      // browser blocked contentDocument access (cross-origin). Both → null.
+    const result = await invoke<string>('capture_route_screenshot', { url });
+    if (typeof result === 'string' && result.length > 0) {
+      logElapsed('ipc', start);
+      return result;
+    }
+  } catch {
+    // Stub returns Err today. Also catches: invoke() rejection when not
+    // running under Tauri (vitest, storybook), command not registered,
+    // serialization errors. All non-fatal — fall through to path 2.
+  }
+
+  // Path 2: same-origin canvas trick. Wrapped in a single try/catch so any
+  // failure mode (SecurityError on contentDocument, tainted canvas,
+  // serialization failure, image load error) bottoms out at a null return.
+  try {
+    if (!iframe) return null;
+
+    // contentDocument access throws SecurityError for cross-origin iframes.
+    // We catch the throw via the outer try/catch and return null. Note that
+    // some browsers (older WebKit) log a warning even when the throw is
+    // caught — that's a runtime side effect we can't suppress from JS.
+    let doc: Document | null;
+    try {
+      doc = iframe.contentDocument;
+    } catch {
+      // Cross-origin SecurityError — no screenshot possible from JS, and
+      // the IPC stub already failed. Return null.
       return null;
     }
+    if (!doc || !doc.documentElement) return null;
 
     const w = iframe.clientWidth || 600;
     const h = iframe.clientHeight || 400;
 
-    // Serialize the iframe's documentElement (html→head→body) into an XML
-    // string. The svg + foreignObject technique relies on the browser's
-    // SVG renderer to rasterize the HTML. Stylesheets must be inline-able;
-    // external @font-face references may not render correctly but the
-    // structural content (DOM layout, atom-chip-target elements) does.
     const xml = new XMLSerializer().serializeToString(doc.documentElement);
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><foreignObject width="100%" height="100%">${xml}</foreignObject></svg>`;
-
-    // Encode as a Blob URL so the Image loader doesn't choke on URI-encoded
-    // edge cases (special characters, large payloads).
     const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
+    const objectUrl = URL.createObjectURL(blob);
 
     const dataUrl = await new Promise<string | null>((resolve) => {
       const img = new Image();
-      // crossOrigin = 'anonymous' minimizes taint risk — only resources with
-      // CORS-permissive headers contribute. Tainted canvases still happen
-      // when the iframe contains a non-CORS image.
       img.crossOrigin = 'anonymous';
       img.onload = () => {
         try {
@@ -90,53 +111,47 @@ export async function captureIframeScreenshot(
             return;
           }
           ctx.drawImage(img, 0, 0, w, h);
-          // toDataURL throws SecurityError if the canvas is tainted (any
-          // cross-origin resource was drawn). We swallow the error and
-          // resolve null — the caller decides on a fallback.
-          const out = canvas.toDataURL('image/png');
-          resolve(out);
-        } catch (err) {
-          if (import.meta.env?.DEV) {
-            console.warn(
-              '[iframeScreenshot] toDataURL failed (canvas tainted?):',
-              err,
-            );
-          }
+          // toDataURL throws SecurityError on tainted canvases (any
+          // cross-origin image was drawn). Caught locally, resolves null.
+          resolve(canvas.toDataURL('image/png'));
+        } catch {
           resolve(null);
         } finally {
-          URL.revokeObjectURL(url);
+          URL.revokeObjectURL(objectUrl);
         }
       };
       img.onerror = () => {
-        URL.revokeObjectURL(url);
-        if (import.meta.env?.DEV) {
-          console.warn('[iframeScreenshot] image load failed');
-        }
+        URL.revokeObjectURL(objectUrl);
         resolve(null);
       };
-      img.src = url;
+      img.src = objectUrl;
     });
 
-    if (import.meta.env?.DEV) {
-      const end =
-        typeof performance !== 'undefined' &&
-        typeof performance.now === 'function'
-          ? performance.now()
-          : Date.now();
-      const elapsed = end - start;
-      console.log(`[iframeScreenshot] capture: ${elapsed.toFixed(1)}ms`);
-      if (elapsed > PERF_BUDGET_MS) {
-        console.warn(
-          `[iframeScreenshot] capture exceeded ${PERF_BUDGET_MS}ms perf budget (${elapsed.toFixed(1)}ms)`,
-        );
-      }
-    }
-
+    logElapsed('canvas', start);
     return dataUrl;
-  } catch (err) {
-    if (import.meta.env?.DEV) {
-      console.error('[iframeScreenshot] capture failed:', err);
-    }
+  } catch {
+    // Catches any unexpected throw from path 2 (XMLSerializer failures, Blob
+    // construction failures, etc.). All non-fatal — caller renders placeholder.
     return null;
+  }
+}
+
+function perfNow(): number {
+  return typeof performance !== 'undefined' &&
+    typeof performance.now === 'function'
+    ? performance.now()
+    : Date.now();
+}
+
+function logElapsed(path: 'ipc' | 'canvas', start: number): void {
+  if (!import.meta.env?.DEV) return;
+  const elapsed = perfNow() - start;
+  // eslint-disable-next-line no-console
+  console.log(`[iframeScreenshot] ${path}: ${elapsed.toFixed(1)}ms`);
+  if (elapsed > PERF_BUDGET_MS) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[iframeScreenshot] ${path} exceeded ${PERF_BUDGET_MS}ms budget (${elapsed.toFixed(1)}ms)`,
+    );
   }
 }
