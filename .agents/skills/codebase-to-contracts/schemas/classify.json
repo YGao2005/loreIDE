@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://contract-ide.local/schemas/classify.json",
+  "title": "LLM Classification Fallback (Stage 1)",
+  "description": "JSON Schema for the Stage 1 LLM-fallback classification call. Fires only when heuristic rules produce a conflict, no match, or land within ±10% of a size threshold. The skill takes the top-1 answer if confidence>=0.6; otherwise marks the file unclassified and skips it. See references/classification-rules.md for the full taxonomy.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "level", "confidence", "reasoning"],
+  "properties": {
+    "kind": {
+      "description": "Same enum as frontmatter.json::kind.",
+      "type": "string",
+      "enum": ["UI", "API", "data", "job", "cron", "event", "lib", "external", "flow"]
+    },
+    "level": {
+      "description": "Same enum as frontmatter.json::level.",
+      "type": "string",
+      "enum": ["L0", "L1", "L2", "L3", "L4"]
+    },
+    "confidence": {
+      "description": "Model's self-reported confidence. The skill rejects results below 0.6.",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "reasoning": {
+      "description": "Brief justification (logged to .staging/diagnostics.json for auditability).",
+      "type": "string",
+      "minLength": 20
+    }
+  }
+}

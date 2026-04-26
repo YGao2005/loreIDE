@@ -1,0 +1,154 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://contract-ide.local/schemas/frontmatter.json",
+  "title": "Sidecar Frontmatter (format_version 3 / 5)",
+  "description": "JSON Schema for sidecar frontmatter emitted by the codebase-to-contracts skill. Mirrors src-tauri/src/sidecar/frontmatter.rs::ContractFrontmatter field-for-field. Plan 14-01b's __tests__/frontmatter-writer.test.mjs verifies parity programmatically.",
+  "$comment": "RUST-VS-JSON PARITY CONTRACT (Phase 14 revision Issue 12). Every non-Option<T> / non-#[serde(default)] field on the Rust ContractFrontmatter struct MUST appear in this schema's required[] array. Reference: contract-ide/src-tauri/src/sidecar/frontmatter.rs lines 39-105. Required Rust fields (non-Option<T>, no serde default): format_version, uuid, kind, level. Optional Rust fields (Option<T>, may be null): parent, code_hash, contract_hash, route, derived_at, rollup_hash, rollup_state, rollup_generation, members. Default-able Rust fields (#[serde(default)], absent => default value): neighbors=[], code_ranges=[], human_pinned=false, section_hashes={}, rollup_inputs=[]. The skill's bootstrap output emits ALL fields explicitly (even Option<T> as null and default-able as []/{}/false) so the JSON Schema requires the FULL surface — that gives downstream Rust serde a stable shape to deserialize without surprises. The skill emits format_version=3 for non-flow nodes and format_version=5 for kind:flow nodes (FLOW-01).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format_version",
+    "uuid",
+    "kind",
+    "level",
+    "parent",
+    "neighbors",
+    "code_ranges",
+    "code_hash",
+    "contract_hash",
+    "human_pinned",
+    "route",
+    "derived_at",
+    "section_hashes",
+    "rollup_inputs",
+    "rollup_hash",
+    "rollup_state",
+    "rollup_generation"
+  ],
+  "properties": {
+    "format_version": {
+      "description": "3 for non-flow contracts; 5 for kind:flow contracts (FLOW-01).",
+      "type": "integer",
+      "enum": [3, 5]
+    },
+    "uuid": {
+      "description": "Stable identity. v5 deterministic from path + element location at bootstrap.",
+      "type": "string",
+      "pattern": "^[0-9a-fA-F-]{36}$"
+    },
+    "kind": {
+      "description": "Node taxonomy. See references/classification-rules.md.",
+      "type": "string",
+      "enum": ["UI", "API", "data", "job", "cron", "event", "lib", "external", "flow"]
+    },
+    "level": {
+      "description": "Hierarchy level. L0=repo, L1=area, L2=subsystem/flow, L3=component/endpoint, L4=atom.",
+      "type": "string",
+      "enum": ["L0", "L1", "L2", "L3", "L4"]
+    },
+    "parent": {
+      "description": "Parent UUID (or null for L0 / orphan).",
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-fA-F-]{36}$"
+    },
+    "neighbors": {
+      "description": "Lateral relationships. Empty at bootstrap; Phase 13 sidebar derives.",
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[0-9a-fA-F-]{36}$" },
+      "default": []
+    },
+    "code_ranges": {
+      "description": "Source code anchors. Empty for kind:flow. For UI L4, tightened in Stage 4 to wrap exactly the JSX element.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["file", "start_line", "end_line"],
+        "additionalProperties": false,
+        "properties": {
+          "file": { "type": "string", "minLength": 1 },
+          "start_line": { "type": "integer", "minimum": 1 },
+          "end_line": { "type": "integer", "minimum": 1 }
+        }
+      }
+    },
+    "code_hash": {
+      "description": "SHA-256 of source bytes spanning code_ranges. null at bootstrap; Phase 6 derivation fills on first re-derive.",
+      "type": ["string", "null"]
+    },
+    "contract_hash": {
+      "description": "SHA-256 of canonicalized contract body. null at bootstrap; Phase 6 fills.",
+      "type": ["string", "null"]
+    },
+    "human_pinned": {
+      "description": "User-pinned via Inspector. false at bootstrap.",
+      "type": "boolean",
+      "default": false
+    },
+    "route": {
+      "description": "For UI: '/path'. For API: 'METHOD /path' (e.g. 'DELETE /api/account'). null for non-routable kinds.",
+      "type": ["string", "null"]
+    },
+    "derived_at": {
+      "description": "ISO 8601 timestamp of last Phase 6 derivation. null at bootstrap.",
+      "type": ["string", "null"]
+    },
+    "section_hashes": {
+      "description": "Per-section SHA-256 hashes (lowercased H2 names). Empty {} at bootstrap; Phase 8 lazy-migrates on first write.",
+      "type": "object",
+      "default": {},
+      "additionalProperties": { "type": "string" }
+    },
+    "rollup_inputs": {
+      "description": "Phase 8 PROP-02. Empty [] at bootstrap.",
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "object",
+        "required": ["child_uuid", "sections"],
+        "additionalProperties": false,
+        "properties": {
+          "child_uuid": { "type": "string", "pattern": "^[0-9a-fA-F-]{36}$" },
+          "sections": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "rollup_hash": {
+      "description": "Most-recent rollup hash. null at bootstrap.",
+      "type": ["string", "null"]
+    },
+    "rollup_state": {
+      "description": "'untracked' at bootstrap. IDE upgrades to 'fresh' on first PROP-02 recompute.",
+      "type": ["string", "null"],
+      "enum": ["fresh", "stale", "untracked", null]
+    },
+    "rollup_generation": {
+      "description": "Monotonic counter for optimistic locking. 0 at bootstrap.",
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "members": {
+      "description": "FLOW-01 ordered member UUIDs. Required when kind=='flow' (>=2 entries: trigger + >=1 participant); absent on all other kinds.",
+      "type": "array",
+      "minItems": 2,
+      "items": { "type": "string", "pattern": "^[0-9a-fA-F-]{36}$" }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "kind": { "const": "flow" } } },
+      "then": {
+        "required": ["members"],
+        "properties": {
+          "format_version": { "const": 5 },
+          "level": { "const": "L2" }
+        }
+      },
+      "else": {
+        "not": { "required": ["members"] },
+        "properties": {
+          "format_version": { "const": 3 }
+        }
+      }
+    }
+  ]
+}

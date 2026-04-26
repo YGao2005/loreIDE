@@ -1,0 +1,93 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://contract-ide.local/schemas/contract-body.json",
+  "title": "Sidecar Body (Stage 3 derivation)",
+  "description": "JSON Schema for the structured-output JSON returned by the body-derivation prompt. The skill renders the JSON into markdown sections (## Intent / ## Role / ## Inputs / ## Outputs / ## Side effects / ## Examples) in fixed order. Mirrors src-tauri/src/sidecar/backend_section_validator.rs requirements (Phase 14 revision Issue 6 — JS-fallback parity).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["intent", "role", "kind"],
+  "properties": {
+    "kind": {
+      "description": "Echoed from the frontmatter so the schema's conditional branches can fire. Must match the corresponding frontmatter.json kind value.",
+      "type": "string",
+      "enum": ["UI", "API", "data", "job", "cron", "event", "lib", "external", "flow"]
+    },
+    "level": {
+      "description": "Echoed from the frontmatter.",
+      "type": "string",
+      "enum": ["L0", "L1", "L2", "L3", "L4"]
+    },
+    "intent": {
+      "description": "## Intent body. Substantive — what this node IS for, not bare placeholder text.",
+      "type": "string",
+      "minLength": 50
+    },
+    "role": {
+      "description": "## Role body. The node's responsibility surface.",
+      "type": "string",
+      "minLength": 30
+    },
+    "examples": {
+      "description": "## Examples body for UI L4 atoms. May be empty array at bootstrap (the '(none yet)' placeholder is rendered when empty).",
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "inputs": {
+      "description": "## Inputs body for backend kinds. Each entry is a string of >=5 chars (Phase 14 revision Issue 6 parity with backend_section_validator.rs — empty bullets cannot pass).",
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 5 }
+    },
+    "outputs": {
+      "description": "## Outputs body for backend kinds. Each entry is a string of >=5 chars (Phase 14 revision Issue 6 parity).",
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 5 }
+    },
+    "side_effects": {
+      "description": "## Side effects body for backend kinds. May be empty array (pure functions legitimately have none).",
+      "type": "array",
+      "minItems": 0,
+      "items": { "type": "string", "minLength": 5 }
+    },
+    "notes": {
+      "description": "## Notes body for kind:flow contracts. Numbered invocation walkthrough.",
+      "type": "string"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": { "const": "UI" },
+          "level": { "const": "L4" }
+        },
+        "required": ["kind", "level"]
+      },
+      "then": {
+        "required": ["examples"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": { "enum": ["API", "lib", "data", "external", "job", "cron", "event"] }
+        },
+        "required": ["kind"]
+      },
+      "then": {
+        "required": ["inputs", "outputs", "side_effects"]
+      }
+    },
+    {
+      "if": {
+        "properties": { "kind": { "const": "flow" } },
+        "required": ["kind"]
+      },
+      "then": {
+        "required": ["notes"]
+      }
+    }
+  ]
+}

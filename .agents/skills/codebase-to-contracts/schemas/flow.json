@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://contract-ide.local/schemas/flow.json",
+  "title": "Flow Members Verification (Stage 5a)",
+  "description": "JSON Schema for the LLM verification call at Stage 5a.5. The model returns a re-ordered (or unchanged) members list plus a notes blob. The skill cross-checks that the returned members are a subset of the AST-walked candidates; on disagreement the AST result wins (guards against hallucinated members). The notes string becomes the ## Notes body section of the flow contract.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["members", "notes"],
+  "properties": {
+    "members": {
+      "description": "Ordered UUIDs. >=2 entries: trigger + >=1 participant. First element is the trigger.",
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "string",
+        "pattern": "^[0-9a-fA-F-]{36}$"
+      }
+    },
+    "notes": {
+      "description": "Numbered invocation walkthrough. Becomes the ## Notes body of the flow contract. See contract-ide-demo/.contracts/flow-delete-account.md for canonical format.",
+      "type": "string",
+      "minLength": 30
+    }
+  }
+}
