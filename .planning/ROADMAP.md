@@ -334,13 +334,13 @@ Phases execute in numeric order; Phase 5 can run in parallel with Phase 3 after 
 | 10. Session Watcher + Filter Pipeline | 4/4 | Complete    | 2026-04-25 |
 | 11. Distiller + Constraint Store + Contract-Anchored Retrieval | 5/5 | Complete   | 2026-04-25 |
 | 12. Conflict / Supersession Engine | 4/4 | Complete   | 2026-04-25 |
-| 13. Substrate UI + New Visual Model + Demo Polish | 6/12 | In Progress|  |
+| 13. Substrate UI + New Visual Model + Demo Polish | 7/13 | In Progress|  |
 
 ### Phase 14: Codebase-to-Contracts Bootstrap (Skill + Demo Application)
 
 **Goal:** Skill (Claude Code Agent Skills v1 package) that bootstraps any Next.js + Prisma + TypeScript repo into a `.contracts/` tree the IDE loads without manual cleanup, demonstrated end-to-end against a Yang-built micro-SaaS demo target.
 **Depends on:** Phase 13 (validators ship in Phase 9; visual-model lock in Phase 13 confirms what shape the skill must produce — both upstream)
-**Plans:** 4/4 plans complete
+**Plans:** 7/13 plans executed
 **Requirements:** [BOOTSTRAP-01, BOOTSTRAP-02, BOOTSTRAP-03, BOOTSTRAP-04, BOOTSTRAP-05]  (proposed; awaiting Yang ratification into REQUIREMENTS.md)
 
 **Demo posture:** Q&A-only pre-recorded inset (60–90s). Locked 4-beat presentation script untouched. The bootstrap demo is held ready in case judges ask "does this work on any repo?"

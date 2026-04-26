@@ -98,6 +98,7 @@ Progress: [██████████] 96% (7/13 phases complete + Phase 10 
 | Phase 13-substrate-ui-demo-polish P03 | ~30 min wall (Tasks 1+2 ~28min initial, Task 3 fix on resume) | 3 tasks (incl. checkpoint:human-verify) | 7 files |
 | Phase 13-substrate-ui-demo-polish P05 | 18 min | 2 of 3 (Task 3 checkpoint:human-verify deferred to plan 13-06 per user direction) tasks | 8 files |
 | Phase 13-substrate-ui-demo-polish P06 | ~95 min wall (initial Tasks 1+2 ~50min, three Rule 1 deviation fixes during checkpoint ~30min, doc finalization ~15min) | 3 of 3 (incl. checkpoint:human-verify approved after 3 deviation fixes) | 15 files (8 created + 7 modified) |
+| Phase 13-substrate-ui-demo-polish P07 | 2 min 30 sec | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -363,6 +364,7 @@ Recent decisions affecting current work:
 - [Phase 13-substrate-ui-demo-polish]: [Plan 13-05]: nodeTypes.ts append-only Wave 2 serialization compliance — `screenCard: ScreenCard` placed AFTER plan 13-04's `serviceCard: ServiceCard` entry; both registrations preserved. lib.rs UNTOUCHED (no Rust IPC commands added — probeRoute already shipped in Phase 4 Plan 04-03). tauri.conf.json frame-src verified READ-ONLY (Phase 4 Plan 04-03 ships both standard ports `http://localhost:* http://127.0.0.1:*`).
 - [Phase 13-substrate-ui-demo-polish]: [Plan 13-05]: Empty-element fallback (no JSX has matching `data-contract-uuid`) renders nothing in 13-05 — section-bottom placement (look up `code_ranges.section_uuid` → find parent section's `data-contract-section-uuid` element → place chip at section's bottom region) deferred to plan 13-10b once seeded fixture exists. TODO comment in AtomChipOverlay.tsx references plan 13-10b. Phase 9 BABEL-01 dependency surfaces as Phase 9 contract gap to plan 13-11 rehearsal if iframe content lacks `data-contract-uuid` annotations on the Beat 1 surface.
 - [Phase 13-substrate-ui-demo-polish]: [Plan 13-05]: ScreenCardData wire shape — `{uuid, name, route, devServerUrl?}` is the contract for plan 13-06's flow-chain assembler. Assembler emits `{type: 'screenCard', data: ScreenCardData, position}` for L3 trigger nodes when `kind: 'screen'`; `route` extracted from contract frontmatter (Phase 9 FLOW-01 UI flow trigger contracts carry this); default `devServerUrl` to `http://localhost:3000` unless user has configured otherwise. Leading-slash defence on route composition (8 vitest cases verify URL composition).
+- [Phase 13-substrate-ui-demo-polish]: Plan 13-07 complete: useCitationStore + SourceArchaeologyModal + citation halo wiring
 
 ### Pending Todos
 

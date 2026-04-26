@@ -31,6 +31,7 @@ import { BackfillModal } from '@/components/session';
 import { CommandPalette } from '@/components/command-palette/CommandPalette';
 import { IntentPalette } from '@/components/command-palette/IntentPalette';
 import { MassEditTrigger } from '@/components/mass-edit/MassEditTrigger';
+import { PRReviewPanel } from '@/components/substrate/PRReviewPanel';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 
 /**
@@ -76,6 +77,25 @@ export function AppShell() {
   const [massEditOpen, setMassEditOpen] = useState(false);
   const handleMassEdit = useCallback(() => setMassEditOpen(true), []);
   const handleMassEditClose = useCallback(() => setMassEditOpen(false), []);
+
+  // Phase 13 Plan 08 (SUB-09): PR review intent-drift panel.
+  // Cmd+Shift+P toggles open; defensive — distinct from Cmd+P (IntentPalette in 13-03).
+  const [prReviewOpen, setPrReviewOpen] = useState(false);
+  const handlePrReviewClose = useCallback(() => setPrReviewOpen(false), []);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (
+        e.key.toLowerCase() === 'p' &&
+        (e.metaKey || e.ctrlKey) &&
+        e.shiftKey
+      ) {
+        e.preventDefault();
+        setPrReviewOpen((prev) => !prev);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
 
   // Rehydrate `useGraphStore.repoPath` on cold start. Rust's `RepoState` is a
   // `Mutex<Option<PathBuf>>` with no disk backing — it resets to `None` on
@@ -381,7 +401,21 @@ export function AppShell() {
   }, []);
 
   const rightPanelRef = usePanelRef();
+  const inspectorPanelRef = usePanelRef();
   const [rightTab, setRightTab] = useState<RightPanelTab>('Chat');
+
+  // Auto-collapse the Inspector when no node is selected; auto-expand on
+  // selection. Users can still drag the handle to override either state.
+  const selectedNodeUuid = useGraphStore((s) => s.selectedNodeUuid);
+  useEffect(() => {
+    const panel = inspectorPanelRef.current;
+    if (!panel) return;
+    if (selectedNodeUuid) {
+      panel.expand?.();
+    } else {
+      panel.collapse?.();
+    }
+  }, [selectedNodeUuid, inspectorPanelRef]);
 
   // Cmd+K → "Focus chat" — expand the right panel if collapsed AND switch to
   // the Chat tab. Optional chaining handles the case where expand() isn't
@@ -424,6 +458,7 @@ export function AppShell() {
               <ResizableHandle />
 
               <ResizablePanel
+                panelRef={inspectorPanelRef}
                 defaultSize="30%"
                 minSize="12%"
                 collapsible
@@ -473,6 +508,14 @@ export function AppShell() {
             handles its own sub-states (query → pulse → modal) internally;
             AppShell only needs to know the open/close boolean. */}
         <MassEditTrigger open={massEditOpen} onClose={handleMassEditClose} />
+
+        {/* Phase 13 Plan 08 (SUB-09): PR review intent-drift panel.
+            Cmd+Shift+P toggles open. Distinct from Cmd+P which is the
+            IntentPalette (plan 13-03). Slides in from the right edge,
+            takes raw diff text, calls analyze_pr_diff IPC, and applies
+            transient intent_drifted overlay via useSubstrateStore.bulkSet.
+            Cancel restores per-uuid previous substrate state. */}
+        <PRReviewPanel open={prReviewOpen} onClose={handlePrReviewClose} />
 
         {/* Backfill historical sessions (Plan 10-04). Top-level modal —
             opened by clicking the SessionStatusIndicator in the footer.
