@@ -13,13 +13,16 @@ import { useCherrypickStore } from '@/store/cherrypick';
 import { useRollupStore } from '@/store/rollup';
 import { useMassEditStore } from '@/store/massEdit';
 import { useSubstrateStore, type SubstrateNodeState } from '@/store/substrate';
+import { useSidebarStore } from '@/store/sidebar';
 import { useUiStore } from '@/store/ui';
 import { getEdges } from '@/ipc/graph';
 import { nodeTypes } from './nodeTypes';
+import { FlowChainLayout } from './FlowChainLayout';
 import type { ContractNodeData } from './ContractNode';
 import type { GroupNodeData } from './GroupNode';
 import { layoutNodes } from './layout';
 import { resolveNodeState } from './contractNodeStyles';
+import { isFlowContract } from '@/ipc/types';
 import type { ContractNode as RowContractNode, GraphEdge } from '@/ipc/types';
 
 // Phase 3 Plan 03-03 (dagre drive-by): hierarchical layout now runs through
@@ -225,6 +228,23 @@ export function GraphCanvasInner() {
   // replaces it wholesale). Do NOT subscribe to s.selectedNodeUuid here;
   // the canvas should not re-render on selection.
   const rows = useGraphStore((s) => s.nodes);
+  // Phase 13 Plan 06: when a flow contract is selected from the sidebar AND
+  // the contract is loaded AND it has members (Phase 9 FLOW-01), swap the
+  // default L0/L1/L2/L3/L4 graph for the vertical participant chain.
+  // Reading inside the component so this branches per-render without forcing
+  // an extra layer in the JSX tree.
+  const selectedFlowUuid = useSidebarStore((s) => s.selectedFlowUuid);
+  const selectedFlowContract = useMemo(
+    () =>
+      selectedFlowUuid
+        ? rows.find((r) => r.uuid === selectedFlowUuid)
+        : undefined,
+    [selectedFlowUuid, rows],
+  );
+  const renderFlowChain =
+    Boolean(selectedFlowUuid) &&
+    Boolean(selectedFlowContract) &&
+    Boolean(selectedFlowContract && isFlowContract(selectedFlowContract));
   // Phase 7 Plan 07-03 (DRIFT-01): read driftedUuids from the drift store.
   // Each mutation produces a new Set reference (immutable update in store),
   // so Zustand's referential inequality check triggers a re-render here.
@@ -360,6 +380,15 @@ export function GraphCanvasInner() {
     },
     [getNode, pushParent, setCenter]
   );
+
+  // Phase 13 Plan 06: when the user has selected a flow contract from the
+  // sidebar (and the contract is loaded with members), swap the default
+  // L0/L1/L2/L3/L4 graph for the vertical participant chain. The default
+  // graph hooks above still run unconditionally so that returning to
+  // "no flow selected" instantly re-renders without re-fetching state.
+  if (renderFlowChain) {
+    return <FlowChainLayout />;
+  }
 
   return (
     <ReactFlow

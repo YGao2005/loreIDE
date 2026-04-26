@@ -70,6 +70,8 @@ import { resolveNodeState } from './contractNodeStyles';
 import { useDriftStore } from '@/store/drift';
 import { useRollupStore } from '@/store/rollup';
 import { useSubstrateStore } from '@/store/substrate';
+import { useScreenshotStore } from '@/store/screenshots';
+import { captureIframeScreenshot } from '@/lib/iframeScreenshot';
 
 const DEFAULT_DEV_PORT = 3000;
 const DEFAULT_DEV_BASE = `http://localhost:${DEFAULT_DEV_PORT}`;
@@ -90,6 +92,19 @@ export interface ScreenCardData extends Record<string, unknown> {
    * isn't on the standard port.
    */
   devServerUrl?: string;
+  /**
+   * Phase 13 Plan 06 Beat 4 single-iframe budget. When `true` (default), this
+   * card renders a live iframe and captures screenshots on iframe load for
+   * non-focused twins to consume. When `false` (set by FlowChainLayout when
+   * this flow is NOT the focused flow), this card renders a cached screenshot
+   * from useScreenshotStore instead — a placeholder ("capturing…") shows when
+   * no screenshot is cached yet.
+   *
+   * Default true preserves the plan 13-05 isolation behavior (ScreenCard
+   * mounted alone always gets a live iframe). FlowChainLayout's assembler
+   * passes false explicitly for non-focused flows.
+   */
+  isFocused?: boolean;
 }
 
 type ProbeState = 'probing' | 'reachable' | 'unreachable';
@@ -101,6 +116,10 @@ function buildPreviewUrl(route: string, base: string): string {
 
 function ScreenCardImpl({ data }: NodeProps) {
   const d = data as ScreenCardData;
+  // Default `true` preserves plan 13-05's isolation behavior (ScreenCard mounted
+  // alone always gets a live iframe). FlowChainLayout's assembler explicitly
+  // passes `false` for non-focused flows in two-flow scenarios (Beat 4).
+  const isFocused = d.isFocused !== false;
   const baseUrl = d.devServerUrl ?? DEFAULT_DEV_BASE;
   const fullUrl = buildPreviewUrl(d.route, baseUrl);
 
@@ -128,7 +147,21 @@ function ScreenCardImpl({ data }: NodeProps) {
     substrate,
   );
 
+  // Phase 13 Plan 06: cached screenshot for non-focused twin rendering. Reading
+  // by uuid keeps re-renders gated on this specific entry's identity (Map
+  // mutation produces new identity per useScreenshotStore contract).
+  const cachedScreenshot = useScreenshotStore((s) => s.cache.get(d.uuid));
+  const setScreenshot = useScreenshotStore((s) => s.setScreenshot);
+
   useEffect(() => {
+    // Non-focused twin: skip the network probe entirely. The probe is only
+    // useful when we're going to mount an iframe; non-focused cards render
+    // from the cached screenshot. Setting loadState to 'reachable' lets the
+    // existing render path show the cached image (or its capturing placeholder).
+    if (!isFocused) {
+      setLoadState('reachable');
+      return;
+    }
     let cancelled = false;
     setLoadState('probing');
     probeRoute(fullUrl)
@@ -142,7 +175,7 @@ function ScreenCardImpl({ data }: NodeProps) {
     return () => {
       cancelled = true;
     };
-  }, [fullUrl, probeCount]);
+  }, [fullUrl, probeCount, isFocused]);
 
   return (
     <div
@@ -182,7 +215,7 @@ function ScreenCardImpl({ data }: NodeProps) {
         className="relative"
         style={{ height: 'calc(100% - 36px)', minHeight: 360 }}
       >
-        {loadState === 'reachable' && (
+        {loadState === 'reachable' && isFocused && (
           <>
             <iframe
               ref={iframeRef}
@@ -202,6 +235,23 @@ function ScreenCardImpl({ data }: NodeProps) {
                 pointerEvents: interactMode ? 'auto' : 'none',
               }}
               title={d.name}
+              // Phase 13 Plan 06 Beat 4: capture a screenshot of the iframe
+              // content as soon as it loads so non-focused twins (a second
+              // ScreenCard for the OTHER flow in plan 13-09's side-by-side
+              // view) can render from cache instead of mounting a 2nd iframe.
+              // Defer the capture by one frame so layout/paint settles
+              // (capture-too-early returns blank). Failures (cross-origin
+              // taint, parse errors) silently log in dev — non-fatal.
+              onLoad={() => {
+                const iframe = iframeRef.current;
+                if (!iframe) return;
+                // Defer one frame so layout/paint completes before capture.
+                requestAnimationFrame(() => {
+                  void captureIframeScreenshot(iframe).then((dataUrl) => {
+                    if (dataUrl) setScreenshot(d.uuid, dataUrl);
+                  });
+                });
+              }}
             />
             <div
               // Fade the chip overlay in Interact mode so the user knows
@@ -220,6 +270,33 @@ function ScreenCardImpl({ data }: NodeProps) {
               <AtomChipOverlay iframeRef={iframeRef} parentUuid={d.uuid} />
             </div>
           </>
+        )}
+
+        {/* Phase 13 Plan 06 Beat 4 single-iframe budget: non-focused flow
+            renders a cached screenshot instead of a live iframe. The cached
+            dataUrl is populated by the focused twin (when it last mounted).
+            If no screenshot is cached yet, render a "capturing…" placeholder
+            so the slot doesn't collapse. */}
+        {loadState === 'reachable' && !isFocused && (
+          <div className="relative w-full h-full bg-white">
+            {cachedScreenshot ? (
+              <img
+                src={cachedScreenshot}
+                className="w-full h-full object-cover"
+                alt={d.name}
+                draggable={false}
+              />
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground text-xs">
+                Capturing screenshot…
+              </div>
+            )}
+            {/* Subtle "screenshot" badge so the user can tell at a glance
+                that this card is not live. */}
+            <div className="absolute top-2 right-2 px-2 py-0.5 rounded text-[10px] font-mono bg-slate-900/80 text-slate-300 border border-slate-700/40 pointer-events-none">
+              screenshot
+            </div>
+          </div>
         )}
 
         {loadState === 'probing' && (

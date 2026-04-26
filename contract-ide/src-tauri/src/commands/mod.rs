@@ -21,6 +21,7 @@ pub mod reconcile;
 pub mod repo;
 pub mod retrieval;
 pub mod rollup;
+pub mod screenshot;
 pub mod session;
 pub mod sidebar;
 pub mod substrate;
