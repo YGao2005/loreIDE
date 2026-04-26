@@ -32,6 +32,7 @@ import { CommandPalette } from '@/components/command-palette/CommandPalette';
 import { IntentPalette } from '@/components/command-palette/IntentPalette';
 import { MassEditTrigger } from '@/components/mass-edit/MassEditTrigger';
 import { PRReviewPanel } from '@/components/substrate/PRReviewPanel';
+import { SyncButton } from '@/components/substrate/SyncButton';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 
 /**
@@ -516,6 +517,16 @@ export function AppShell() {
             transient intent_drifted overlay via useSubstrateStore.bulkSet.
             Cancel restores per-uuid previous substrate state. */}
         <PRReviewPanel open={prReviewOpen} onClose={handlePrReviewClose} />
+
+        {/* Phase 13 Plan 09 (SUB-09): Mocked Sync affordance for the live
+            two-laptop demo. Fixed top-right under the drag-region spacer so
+            it's always reachable during Beat 3. Click → trigger_sync_animation
+            IPC → staggered blast-radius animation across the chain. Plan
+            13-10b will swap the IPC's placeholder uuids for fixture-loaded
+            ones; the button itself does not change. */}
+        <div className="fixed top-9 right-4 z-30">
+          <SyncButton />
+        </div>
 
         {/* Backfill historical sessions (Plan 10-04). Top-level modal —
             opened by clicking the SessionStatusIndicator in the footer.

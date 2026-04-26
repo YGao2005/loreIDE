@@ -125,6 +125,12 @@ pub fn run() {
             // will append trigger_sync_animation in its own Wave 4 commit AFTER
             // this one.
             commands::pr_review::analyze_pr_diff,
+            // 13-09 mocked Sync blast-radius animation (SUB-09). Wave 4
+            // serialization hint: appended AFTER 13-08's analyze_pr_diff per
+            // the plan frontmatter ordering contract. Returns pre-known
+            // trigger + participant uuids for the staged delete-account flow;
+            // plan 13-10b will swap placeholder uuids for fixture-loaded ones.
+            commands::sync::trigger_sync_animation,
         ])
         .setup(|app| {
             let window = app

@@ -28,4 +28,5 @@ pub mod sidebar;
 pub mod substrate;
 pub mod substrate_panel;
 pub mod supersession;
+pub mod sync;
 pub mod validation;
