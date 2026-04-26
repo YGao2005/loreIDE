@@ -43,6 +43,7 @@ import { SubstrateCitation } from '@/components/inspector/SubstrateCitation';
 import { loadSyncReview, applyConstraintNarrowing } from '@/lib/demoOrchestration';
 import { animateSyncBlastRadius } from '@/lib/syncBlastRadius';
 import { cn } from '@/lib/utils';
+import { invoke } from '@tauri-apps/api/core';
 
 const FLAG_HALO_MS = 8000;
 const HARVEST_CHIP_HALO_MS = 4000;
@@ -95,6 +96,27 @@ function EmptyState({ pulling }: { pulling: boolean }) {
 
   const onPull = async () => {
     try {
+      // Publish any captured-but-unsynced substrate rows BEFORE the staged
+      // fixture animation runs. Distiller writes new rows with
+      // published_at=NULL; retrieval filters published_at IS NOT NULL; this
+      // call flips NULL → now() so a freshly-captured rule (e.g. the design-
+      // system #FF0000 commitment from the PM session) becomes retrievable
+      // for the next agent run. No-op when nothing is pending. Best-effort:
+      // a publish failure should not block the demo animation.
+      try {
+        const result = await invoke<{
+          published_count: number;
+          published_uuids: string[];
+        }>('publish_pending_substrate');
+        if (result.published_count > 0) {
+          console.info(
+            `[SyncReview] Published ${result.published_count} pending substrate rules:`,
+            result.published_uuids,
+          );
+        }
+      } catch (publishErr) {
+        console.warn('[SyncReview] publish_pending_substrate failed:', publishErr);
+      }
       const payload = await loadSyncReview(nextBeat);
       const ordered = [
         payload.blast_radius.trigger_uuid,

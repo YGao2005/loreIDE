@@ -15,7 +15,8 @@
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
+use tauri_plugin_sql::{DbInstances, DbPool};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
@@ -80,6 +81,94 @@ pub async fn trigger_sync_animation(app: AppHandle) -> Result<SyncTriggerResult,
     // Best-effort emit — non-fatal if no listeners.
     let _ = app.emit("sync:triggered", &result);
     Ok(result)
+}
+
+/// Result of publishing pending substrate rows on Sync.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "snake_case")]
+pub struct PublishPendingResult {
+    /// Count of rows whose `published_at` was just flipped from NULL to now().
+    pub published_count: usize,
+    /// UUIDs of those rows — the demo's harvest panel can use these to halo
+    /// the freshly-synced rules in the Review surface.
+    pub published_uuids: Vec<String>,
+}
+
+/// Publish every captured-but-unsynced substrate row.
+///
+/// The distiller writes new rows with `published_at = NULL` (v10 migration).
+/// Retrieval queries (candidates.rs, find_substrate_by_intent, MCP tools)
+/// filter `WHERE published_at IS NOT NULL`, so an unsynced row never reaches
+/// an agent prompt. This IPC flips `published_at` from NULL to `datetime('now')`
+/// on every row that hasn't been published yet, making them retrievable in one
+/// atomic SQL statement.
+///
+/// Demo placement: SyncReviewPanel calls this from `onPull` immediately
+/// before `loadSyncReview` so the staged blast-radius animation lands on a
+/// substrate state that *includes* the freshly-synced rules.
+///
+/// Idempotent: re-running with no pending rows is a no-op (returns count=0).
+#[tauri::command]
+pub async fn publish_pending_substrate(
+    app: AppHandle,
+) -> Result<PublishPendingResult, String> {
+    let pool = {
+        let instances = app.state::<DbInstances>();
+        let db_map = instances.0.read().await;
+        let db = db_map
+            .get("sqlite:contract-ide.db")
+            .ok_or("DB not loaded")?;
+        match db {
+            DbPool::Sqlite(p) => p.clone(),
+            #[allow(unreachable_patterns)]
+            _ => return Err("expected sqlite pool".into()),
+        }
+    };
+
+    // Snapshot the UUIDs first so we can return them to the caller (the harvest
+    // panel haloing wants to know *which* rows just went live).
+    let pending: Vec<(String,)> = sqlx::query_as(
+        "SELECT uuid FROM substrate_nodes
+         WHERE published_at IS NULL AND invalid_at IS NULL",
+    )
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| format!("publish_pending_substrate snapshot: {e}"))?;
+
+    let uuids: Vec<String> = pending.into_iter().map(|(u,)| u).collect();
+
+    if uuids.is_empty() {
+        return Ok(PublishPendingResult {
+            published_count: 0,
+            published_uuids: vec![],
+        });
+    }
+
+    let res = sqlx::query(
+        "UPDATE substrate_nodes
+         SET published_at = datetime('now')
+         WHERE published_at IS NULL AND invalid_at IS NULL",
+    )
+    .execute(&pool)
+    .await
+    .map_err(|e| format!("publish_pending_substrate update: {e}"))?;
+
+    let count = res.rows_affected() as usize;
+
+    // Best-effort event so the canvas / harvest panel can react without the JS
+    // having to forward the result manually.
+    let _ = app.emit(
+        "substrate:published",
+        serde_json::json!({
+            "count": count,
+            "uuids": &uuids,
+        }),
+    );
+
+    Ok(PublishPendingResult {
+        published_count: count,
+        published_uuids: uuids,
+    })
 }
 
 #[cfg(test)]

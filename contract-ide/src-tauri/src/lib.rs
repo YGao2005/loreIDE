@@ -132,6 +132,10 @@ pub fn run() {
             // trigger + participant uuids for the staged delete-account flow;
             // plan 13-10b will swap placeholder uuids for fixture-loaded ones.
             commands::sync::trigger_sync_animation,
+            // Publishes captured-but-unsynced substrate rows on Sync (v10
+            // migration adds substrate_nodes.published_at; distiller writes
+            // NULL; retrieval filters NOT NULL; this IPC flips NULL → now()).
+            commands::sync::publish_pending_substrate,
             // 13-10b demo orchestration IPCs (Wave 5). Append-only after
             // 13-09's trigger_sync_animation. Read fixture JSON files
             // (shipped by sibling plan 13-10a) at runtime; defensive on
