@@ -131,6 +131,12 @@ pub fn run() {
             // trigger + participant uuids for the staged delete-account flow;
             // plan 13-10b will swap placeholder uuids for fixture-loaded ones.
             commands::sync::trigger_sync_animation,
+            // 13-10b demo orchestration IPCs (Wave 5). Append-only after
+            // 13-09's trigger_sync_animation. Read fixture JSON files
+            // (shipped by sibling plan 13-10a) at runtime; defensive on
+            // missing-fixture state (Err with diagnostic, no panic).
+            commands::demo_orchestration::load_beat3_verifier_fixture,
+            commands::demo_orchestration::emit_beat4_harvest,
         ])
         .setup(|app| {
             let window = app

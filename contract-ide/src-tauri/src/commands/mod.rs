@@ -6,6 +6,7 @@ pub mod agent;
 pub mod cherrypick;
 pub mod contracts;
 pub mod delegate;
+pub mod demo_orchestration;
 pub mod derive;
 pub mod devlog;
 pub mod distiller;
