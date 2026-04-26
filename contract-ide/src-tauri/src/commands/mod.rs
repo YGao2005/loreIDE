@@ -16,6 +16,7 @@ pub mod journal;
 pub mod mass_edit;
 pub mod mcp;
 pub mod nodes;
+pub mod pr_review;
 pub mod receipts;
 pub mod reconcile;
 pub mod repo;

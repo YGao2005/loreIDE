@@ -120,6 +120,11 @@ pub fn run() {
             // append analyze_pr_diff and 13-09 will append trigger_sync_animation
             // in their own Wave 3 commits AFTER this one.
             commands::screenshot::capture_route_screenshot,
+            // 13-08 PR review intent-drift mode (SUB-09). Wave 4 serialization
+            // hint: appended AFTER 13-06's capture_route_screenshot. Plan 13-09
+            // will append trigger_sync_animation in its own Wave 4 commit AFTER
+            // this one.
+            commands::pr_review::analyze_pr_diff,
         ])
         .setup(|app| {
             let window = app
