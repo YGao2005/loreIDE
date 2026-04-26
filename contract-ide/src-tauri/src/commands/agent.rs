@@ -65,6 +65,7 @@ pub async fn run_agent(
     model: Option<String>,
     effort: Option<String>,
     extra_args: Option<Vec<String>>,
+    substrate_rules_json: Option<String>, // Phase 15: forwarded to parse_and_persist → receipts
 ) -> Result<String, String> {
     let bare = bare.unwrap_or(false);
     let model = model.unwrap_or_else(|| DEFAULT_AGENT_MODEL.to_string());
@@ -182,6 +183,7 @@ pub async fn run_agent(
     let tracking_id2 = tracking_id.clone();
     let scope_uuid2 = scope_uuid.clone();
     let stream_session_id2 = Arc::clone(&stream_session_id);
+    let substrate_rules_json2 = substrate_rules_json.clone();
 
     tauri::async_runtime::spawn(async move {
         loop {
@@ -256,6 +258,7 @@ pub async fn run_agent(
                             jpath,
                             scope_uuid2.as_deref(),
                             Some(wall_time_ms),
+                            substrate_rules_json2.as_deref(), // Phase 15: TRUST-03
                         )
                         .await
                         {

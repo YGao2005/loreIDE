@@ -38,6 +38,20 @@ struct ContractRow {
     name: String,
 }
 
+impl ComposeResult {
+    /// Serialize substrate hit UUIDs to a JSON array string like `["uuid1","uuid2"]`,
+    /// or None when there are no hits. Bound onto receipts.substrate_rules_json
+    /// downstream so TRUST-03 impact preview can count real recent prompts that
+    /// included the rule.
+    pub fn substrate_rules_json(&self) -> Option<String> {
+        if self.hits.is_empty() {
+            return None;
+        }
+        let uuids: Vec<&str> = self.hits.iter().map(|h| h.uuid.as_str()).collect();
+        serde_json::to_string(&uuids).ok()
+    }
+}
+
 pub async fn compose_prompt(
     app: &AppHandle,
     scope_uuid: &str,

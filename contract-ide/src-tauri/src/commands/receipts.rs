@@ -309,6 +309,7 @@ pub async fn parse_and_persist(
     jsonl_path: &Path,
     scope_uuid: Option<&str>,
     wall_time_ms: Option<u64>,
+    substrate_rules_json: Option<&str>, // Phase 15 TRUST-03: JSON array of substrate hit UUIDs
 ) -> Result<SessionReceipt, String> {
     // Parse (with mock fallback on any error).
     let mut receipt = match parse_session_jsonl(jsonl_path, tracking_id) {
@@ -367,14 +368,15 @@ pub async fn parse_and_persist(
     let raw_jsonl_path_str = transcript_path.clone();
     let parse_status_str = receipt.parse_status.as_str();
 
-    // INSERT INTO receipts — uses 08-01 merged column list verbatim.
+    // INSERT INTO receipts — uses 08-01 merged column list + Phase 15 substrate_rules_json.
     sqlx::query(
         r#"INSERT INTO receipts (
              id, session_id, transcript_path, started_at, finished_at,
              input_tokens, output_tokens, cache_read_tokens, tool_call_count,
              nodes_touched, estimated_cost_usd, raw_summary,
-             raw_jsonl_path, parse_status, wall_time_ms
-           ) VALUES (?1,?2,?3,?4,?5, ?6,?7,?8,?9, ?10,?11,?12, ?13,?14,?15)"#,
+             raw_jsonl_path, parse_status, wall_time_ms,
+             substrate_rules_json
+           ) VALUES (?1,?2,?3,?4,?5, ?6,?7,?8,?9, ?10,?11,?12, ?13,?14,?15, ?16)"#,
     )
     .bind(&receipt_id)
     .bind(&receipt.session_id)
@@ -391,6 +393,7 @@ pub async fn parse_and_persist(
     .bind(&raw_jsonl_path_str)
     .bind(parse_status_str)
     .bind(receipt.wall_time_ms.map(|v| v as i64))
+    .bind(substrate_rules_json)                     // Phase 15 TRUST-03: ?16
     .execute(pool)
     .await
     .map_err(|e| format!("INSERT receipts failed: {e}"))?;

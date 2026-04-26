@@ -42,12 +42,19 @@ pub async fn delegate_plan(
 /// Appends a decisions.json emission directive to the planning prompt, then
 /// calls Phase 8's run_agent with bare=true.
 /// Returns the tracking_id immediately (agent streams in background via Phase 8 machinery).
+///
+/// Phase 15 amendment: `substrate_rules_json` carries the JSON-stringified list of
+/// substrate hit UUIDs that the frontend received from `delegate_compose`. The frontend
+/// JSON-stringifies the hit UUIDs array and passes them in here so they can be
+/// persisted onto `receipts.substrate_rules_json` for TRUST-03 impact preview counts.
+/// None (or omitted) is valid — non-delegate callers simply skip the column.
 #[tauri::command]
 pub async fn delegate_execute(
     app: tauri::AppHandle,
     scope_uuid: String,
     assembled_prompt: String,
     atom_uuid: Option<String>,
+    substrate_rules_json: Option<String>,
 ) -> Result<String, String> {
     let final_atom_uuid = atom_uuid.unwrap_or_else(|| scope_uuid.clone());
 
@@ -96,6 +103,7 @@ List the implicit decisions you made — defaults you picked that no substrate r
         Some("sonnet".to_string()),
         Some("medium".to_string()),
         Some(extra_args),
+        substrate_rules_json,   // Phase 15: threaded to receipts.substrate_rules_json
     )
     .await?;
 
