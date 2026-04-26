@@ -66,6 +66,14 @@ THEN nothing changes and their account remains fully active
 
 **NT:** "Delegate to agent. The system reads my contract atom, walks its position in the graph, pulls the constraints that apply, composes the agent's prompt — and dispatches. The agent never gets a vague request."
 
+**ON SCREEN:** Inspector chat field stays open. NT types one follow-up line and hits enter:
+
+> *"And per the design system — destructive primary actions use #FF0000, not a Tailwind red variant. Treat that as a team rule going forward."*
+
+A subtle "Captured to substrate" chip appears next to the message — the distiller has read it as a portable team commitment.
+
+**NT:** "One sentence stated as a team rule, not a personal aside. The substrate captures it the same way it captures any rule from a Claude Code session — and you'll see it carry forward this afternoon."
+
 ---
 
 ## 0:50–2:05 — Beat 2: Agent execution (full-screen recording)
@@ -95,7 +103,7 @@ All five trace back to the same February 2026 deletion-incident thread. Right pa
 
 **T:** [over recording, next ~25s] "Five substrate hits, all from one incident-response thread the team had two months ago — captured automatically from the team's Claude Code sessions via a PostToolUse hook. No one wrote a CLAUDE.md. Bare Claude on the right has none of that — greps, finds nothing specific, defaults to `db.user.delete()`. One line. Defensibly correct against the schema. Wrong against five rules the team got burned learning."
 
-**ON SCREEN:** left — agent reads target file once, writes a 5-file change first try (settings page + API route + `beginAccountDeletion` lib + audit + mailing). **The iframe at the top of the left pane re-renders live: a Delete Account button appears in the danger-zone section, with the email-link confirmation modal wired up.** Right — bare Claude writes the one-line `db.user.delete()` against the schema, no preview at all.
+**ON SCREEN:** left — agent reads target file once, writes a 5-file change first try (settings page + API route + `beginAccountDeletion` lib + audit + mailing). **The iframe at the top of the left pane re-renders live: a Delete Account button appears in the danger-zone section, rendered in #FF0000 per the just-captured design-system rule, with the email-link confirmation modal wired up. Annotation `applied [6] design-system #FF0000` flashes inline as the agent writes the className.** Right — bare Claude writes the one-line `db.user.delete()` against the schema, no preview at all.
 
 **ON SCREEN:** **rubric panel slides up across the bottom of the recording (persists ~10s)** — the team rules being checked against each agent's output:
 
@@ -160,12 +168,13 @@ The trigger card at top is the live iframe. The right sidebar has two tabs: **In
 
 **T:** "Now I'm the engineer. My machine, on the right. My partner just pushed — let me pull."
 
-**ON SCREEN:** T clicks **`Pull incoming changes`**. Brief spinner (~500ms — represents `git pull`; staging note: substrate is pre-loaded, the click hydrates from a fixture). Two things animate simultaneously:
+**ON SCREEN:** T clicks **`Pull incoming changes`**. Brief spinner (~500ms — represents `git pull`; staging note: substrate is pre-loaded, the click hydrates from a fixture, AND `publish_pending_substrate` flips `published_at` from NULL → now() on the morning's PM-captured rule so it becomes retrievable on this laptop). Three things animate simultaneously:
 
-- **Right sidebar:** Review tab populates with a PR-review-shaped surface, hydrated top-to-bottom (header → compact chain → honors → implicit decisions → flag).
+- **Right sidebar:** Review tab populates with a PR-review-shaped surface, hydrated top-to-bottom (header → compact chain → honors → implicit decisions → harvested-from-upstream → flag). The harvested-from-upstream section carries one chip: `con-design-system-destructive-ff0000-2026-04-25` — *"Destructive primary actions use #FF0000 per the design system"* (captured during PM session this morning, just synced).
 - **Main canvas:** blast-radius animation pulses through the chain — trigger card first (the new Delete button glows), then service cards in invocation order down the chain. The flow itself is the blast radius made visible.
+- **Substrate panel** (bottom-left of canvas): "+1 from upstream" badge increments — visible confirmation that the rule wasn't here a moment ago.
 
-**T:** "Pull. The review surface lands on the right; the chain on my canvas pulses top-to-bottom. Blast radius — visible. I'm not opening a diff file."
+**T:** "Pull. New rule from this morning's session lands first — design-system color for destructive actions, captured when the PM stated it. The review surface lands on the right; the chain on my canvas pulses top-to-bottom. Blast radius — visible. I'm not opening a diff file."
 
 **ON SCREEN:** the Review tab settles. Header shows commit metadata (author: partner persona; message: *"Add Delete Account action to Settings danger zone"*; 5 files). Below the header, a **What rules were honored** section lists 6 ✓ rows, each with a `[source]` citation pill:
 
@@ -249,7 +258,7 @@ from this? [Promote to substrate]
 add a delete-workspace button to the team settings page
 ```
 
-Substrate query streams. **All five rules from this morning surface again** — `dec-soft-delete-30day-grace`, `con-anonymize-not-delete-tax-held`, `con-stripe-customer-archive`, `con-mailing-list-suppress-not-delete`, `dec-confirm-via-email-link` — plus the just-derived `AccountSettings.DangerZone` contract as a recent reference. Agent reads `app/team/[slug]/settings/page.tsx` once, writes a 5-file change first try (workspace-scoped deletion mirroring the morning's pattern; org invoices anonymized, workspace Stripe customer archived, member tokens revoked, owner-orphan check added). Receipt: **~2 tool calls · ~25k context read · 5/5 rules honored.**
+Substrate query streams. **All five incident rules from this morning surface again** — `dec-soft-delete-30day-grace`, `con-anonymize-not-delete-tax-held`, `con-stripe-customer-archive`, `con-mailing-list-suppress-not-delete`, `dec-confirm-via-email-link` — **plus** `con-design-system-destructive-ff0000-2026-04-25` (the rule that synced in moments ago when T hit Pull), plus the just-derived `AccountSettings.DangerZone` contract as a recent reference. Agent reads `app/team/[slug]/settings/page.tsx` once, writes a 5-file change first try (workspace-scoped deletion mirroring the morning's pattern; org invoices anonymized, workspace Stripe customer archived, member tokens revoked, owner-orphan check added). **The Delete Workspace button materializes in #FF0000 — exact hex, not a Tailwind variant — without anyone in this prompt asking for a color.** Receipt: **~2 tool calls · ~25k context read · 6/6 rules honored.**
 
 **ON SCREEN:** the canvas updates — a new L2 flow renders for `Team Settings → Delete Workspace`, vertical chain similar to the morning's but with the workspace-scoped variations:
 
@@ -291,7 +300,7 @@ The two ghost-ref participants (`stripe.customers.update`, `mailchimp.suppress`)
    reviewer accepted, now a team rule."
 ```
 
-**NT:** "Different surface. Same intent. The agent never re-discovered any of it. Stripe and Mailchimp show up as ghosts on the canvas — same services we taught it about this morning. The five morning rules cited again on the right. And three new rules harvested, each landing on the participant it lives on."
+**NT:** "Different surface. Same intent. The agent never re-discovered any of it. Stripe and Mailchimp show up as ghosts on the canvas — same services we taught it about this morning. The five morning rules cited again on the right. And three new rules harvested, each landing on the participant it lives on. And look — the button is red. Same hex I asked for once this morning. The substrate carried it. No CLAUDE.md edit, no design-system import, no second prompt."
 
 **ON SCREEN:** ⏵ Brief recorded inset (8s, full-screen): bare Claude on the same prompt. Greps for `Workspace`, writes a `<DangerActionButton confirmation="modal">` that calls `fetch('/api/team/${slug}', { method: 'DELETE' })` against an endpoint that doesn't exist. Same shape of failure as this morning, on a new surface. Receipt: **15 tool calls · 743k context read · 0/5 rules honored.**
 
@@ -338,6 +347,7 @@ The two ghost-ref participants (`stripe.customers.update`, `mailchimp.suppress`)
 - **Beat 4 visual: shared services render as ghost-ref participants in the new flow chain; new atom chips animate onto the specific participant they live on** (not into a generic harvest panel)
 - **Beat 3 implicit-decisions group** in verifier output — 3 hand-crafted rows (24h email-link expiry, `audit_log` destination, async cleanup) inserted between substrate honors and the orange flag, surfacing agent defaults that no team rule covered
 - **Orange-flag fixture** (parent surface holds `con-settings-no-modal-interrupts-2025-Q4` under superseded `reduce-onboarding-friction` priority; current is `compliance-first` since 2026-04-24)
+- **Design-system #FF0000 thread** — PM follow-up message in Beat 1 captures `con-design-system-destructive-ff0000-2026-04-25` via the live distiller (no fixture). The rule is written `published_at = NULL` until T's Pull click in Beat 3 fires `publish_pending_substrate`, flipping it to retrievable. Beat 4's workspace-delete agent receives the rule alongside the 5 incident rules and renders the new button in `#FF0000` exactly. The composer prompt's "exact values are exact" clause prevents Tailwind-variant substitution. Verification checklist in `.planning/demo/ff0000-thread-verification.md`.
 
 **Open (production work, downstream):**
 - Repo provisioning: `contract-ide-demo` fork with Auth + Prisma + Stripe + Mailchimp adapters; planted `DangerActionButton`; Account Settings + Team Settings scaffolds with danger-zone sections present (empty body, ready for the agent to fill)
