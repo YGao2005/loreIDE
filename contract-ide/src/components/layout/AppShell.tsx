@@ -10,6 +10,11 @@ import { useRollupStore } from '@/store/rollup';
 import { getSubstrateStatesForCanvas } from '@/ipc/substrate';
 import { useSubstrateStore, type SubstrateNodeState } from '@/store/substrate';
 import { subscribeAgentStream, subscribeAgentComplete } from '@/ipc/agent';
+import {
+  listOpenChats,
+  touchChat,
+  updateChatSessionId,
+} from '@/ipc/chats';
 import { subscribeReceiptCreated } from '@/ipc/receipts';
 import { useAgentStore } from '@/store/agent';
 import { useReceiptsStore } from '@/store/receipts';
@@ -30,13 +35,8 @@ import { IntentPalette } from '@/components/command-palette/IntentPalette';
 import { MassEditTrigger } from '@/components/mass-edit/MassEditTrigger';
 import { PRReviewPanel } from '@/components/substrate/PRReviewPanel';
 import { SyncButton } from '@/components/substrate/SyncButton';
-import { VerifyAgainstIntentButton } from '@/components/substrate/VerifyAgainstIntentButton';
 import { VerifierPanel } from '@/components/substrate/VerifierPanel';
 import { HarvestPanel } from '@/components/substrate/HarvestPanel';
-// Phase 13 Plan 10b: dev-mode rehearsal panel — single-click beat triggers
-// reading fixtures shipped by sibling plan 13-10a. Stripped from release
-// builds via import.meta.env.DEV gate + dead-code elimination.
-import { DemoOrchestrationPanel } from '@/components/dev/DemoOrchestrationPanel';
 // Phase 13 Plan 09: side-effect import wires window.__demo helpers in dev so
 // DevTools can stage Beat 3 manually. Plan 13-10b replaces with a UI panel.
 import '@/lib/demoOrchestration';
@@ -47,7 +47,7 @@ import { useScreenViewerHotkeys } from '@/hooks/useScreenViewerHotkeys';
 /**
  * IDE shell layout.
  *
- *   horizontal: [ Sidebar | Center | RightPanel (Chat / Receipts) ]
+ *   horizontal: [ Sidebar | Center | RightPanel (Chat / History / Review) ]
  *   Center is vertical:     [ Graph ]
  *                           [ Inspector (Contract / Code / Preview, collapsible) ]
  *
@@ -140,6 +140,27 @@ export function AppShell() {
         await openRepo(stored);
       } catch (e) {
         console.error('[AppShell] rehydrate failed', e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Hydrate open chats from SQLite on boot. Chats are app-global (single
+  // sqlite:contract-ide.db) and survive repo switches; the right panel
+  // shows the same tab strip regardless of which repo is open. Scope
+  // references in a chat row may dangle if the user switched repos —
+  // ChatPanel is defensive about missing nodes.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const rows = await listOpenChats();
+        if (cancelled) return;
+        useAgentStore.getState().hydrate(rows);
+      } catch (e) {
+        console.error('[AppShell] chat hydrate failed', e);
       }
     })();
     return () => {
@@ -250,7 +271,9 @@ export function AppShell() {
     let unlistenReceipt: (() => void) | undefined;
     void (async () => {
       const u1 = await subscribeAgentStream((p) => {
-        useAgentStore.getState().appendStream(p.line);
+        useAgentStore
+          .getState()
+          .appendStream(p.tracking_id, p.line, p.is_stderr);
       });
       if (cancelled) {
         u1();
@@ -258,7 +281,25 @@ export function AppShell() {
         unlistenStream = u1;
       }
       const u2 = await subscribeAgentComplete((p) => {
-        useAgentStore.getState().complete(p.code);
+        const sessionId = p.session_id ?? null;
+        // Resolve the chat that owns this run BEFORE the store mutation
+        // clears the trackingId mapping in completeRun.
+        const chatId = useAgentStore.getState().trackingToChat[p.tracking_id];
+        useAgentStore.getState().completeRun(p.tracking_id, p.code, sessionId);
+        // Persist session_id + bump updated_at on the chat row. Fire and
+        // forget — the store already reflects the change for the UI; this
+        // is just durability so the chat survives an app restart with its
+        // resume id intact.
+        if (chatId && sessionId) {
+          void updateChatSessionId(chatId, sessionId).catch((e) =>
+            console.warn('[AppShell] updateChatSessionId failed', e),
+          );
+        }
+        if (chatId) {
+          void touchChat(chatId).catch((e) =>
+            console.warn('[AppShell] touchChat failed', e),
+          );
+        }
       });
       if (cancelled) {
         u2();
@@ -491,7 +532,7 @@ export function AppShell() {
 
           <ResizableHandle />
 
-          {/* Right: full-height Chat / Receipts surface. */}
+          {/* Right: full-height Chat / History / Review surface. */}
           <ResizablePanel
             panelRef={rightPanelRef}
             defaultSize="28%"
@@ -550,7 +591,6 @@ export function AppShell() {
             DemoOrchestrationPanel + window.__demo); VerifierPanel mounts as
             a result of useVerifierStore.setResults flipping `open: true`. */}
         <div className="fixed top-9 right-4 z-30 flex items-center gap-2">
-          <VerifyAgainstIntentButton />
           <SyncButton />
         </div>
 
@@ -566,12 +606,6 @@ export function AppShell() {
             fallback. Renders newly-harvested rules bottom-right; promoted-
             from-implicit rows carry an amber badge. */}
         <HarvestPanel />
-
-        {/* Phase 13 Plan 10b: dev-mode demo orchestration rehearsal panel.
-            Bottom-left z-50; coexists with HarvestPanel (bottom-right z-40)
-            and SyncButton/VerifierPanel (top-right). Stripped from release
-            builds via import.meta.env.DEV gate. */}
-        {import.meta.env.DEV && <DemoOrchestrationPanel />}
 
         {/* Backfill historical sessions (Plan 10-04). Top-level modal —
             opened by clicking the SessionStatusIndicator in the footer.

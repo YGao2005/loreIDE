@@ -66,6 +66,8 @@ pub async fn run_agent(
     effort: Option<String>,
     extra_args: Option<Vec<String>>,
     substrate_rules_json: Option<String>, // Phase 15: forwarded to parse_and_persist → receipts
+    resume_session_id: Option<String>,    // Chat continuity: when set, --resume the prior claude session
+    previous_scope_uuid: Option<String>,  // Scope from the prior turn — when it differs from scope_uuid on a resume turn, we re-inject the new scope so the agent sees the user's mid-chat canvas focus shift.
 ) -> Result<String, String> {
     let bare = bare.unwrap_or(false);
     let model = model.unwrap_or_else(|| DEFAULT_AGENT_MODEL.to_string());
@@ -74,34 +76,9 @@ pub async fn run_agent(
     let tracking_id = uuid::Uuid::new_v4().to_string();
 
     eprintln!(
-        "[run_agent] tracking_id={} scope_uuid={:?} user_prompt={:?}",
-        tracking_id, scope_uuid, prompt
+        "[run_agent] tracking_id={} scope_uuid={:?} previous_scope_uuid={:?} resume_session_id={:?} user_prompt={:?}",
+        tracking_id, scope_uuid, previous_scope_uuid, resume_session_id, prompt
     );
-
-    // Assemble context-rich prompt from SQLite + sidecar reads (AGENT-01 invariant).
-    // Don't silently fall back on error — log the failure so we can see why scoping
-    // didn't work. Falling back to raw `prompt` strips scope context, which makes
-    // the agent answer as if no node were selected.
-    let assembled_prompt = match crate::agent::prompt_assembler::assemble_prompt(
-        &app,
-        &prompt,
-        scope_uuid.as_deref(),
-    )
-    .await
-    {
-        Ok(p) => {
-            eprintln!(
-                "[run_agent] assembled prompt ({} chars):\n----- BEGIN PROMPT -----\n{}\n----- END PROMPT -----",
-                p.len(),
-                p
-            );
-            p
-        }
-        Err(e) => {
-            eprintln!("[run_agent] assemble_prompt FAILED: {} — falling back to raw user prompt (NO SCOPE)", e);
-            prompt.clone()
-        }
-    };
 
     // Resolve the open repo path — the agent must run with cwd at the user's
     // repo so relative paths in code_ranges (`src/foo.tsx`) resolve correctly
@@ -119,17 +96,102 @@ pub async fn run_agent(
             .ok_or("no repository open — call open_repo first")?
     };
 
-    // --- Snapshot ~/.claude/projects/<encoded-cwd>/ BEFORE spawn ---
-    // Fallback path for session-id discovery if stream doesn't expose it.
-    // Use the agent's actual cwd (open repo) so the encoded path matches the
-    // session JSONL Claude writes.
+    // Validate resume_session_id BEFORE deciding whether to skip scope
+    // assembly. claude --resume errors with "valid session ID required" when
+    // the underlying JSONL is missing on disk (account change, /clear, log
+    // rotation). When we drop a stale id, the run starts fresh AND scope
+    // gets re-injected — without the early validation we'd send a bare prompt
+    // with no scope context to a brand-new claude session.
     let encoded_cwd = crate::commands::receipts::encode_cwd(&repo_path);
     let claude_projects_dir = dirs_home().join(".claude").join("projects").join(&encoded_cwd);
+    let resume_session_id: Option<String> = resume_session_id
+        .filter(|s| !s.trim().is_empty())
+        .and_then(|sid| {
+            let candidate = claude_projects_dir.join(format!("{sid}.jsonl"));
+            if candidate.exists() {
+                Some(sid)
+            } else {
+                eprintln!(
+                    "[run_agent] resume_session_id={sid} but JSONL not found at {} — dropping --resume, starting a fresh session",
+                    candidate.display()
+                );
+                None
+            }
+        });
+
+    // Resuming a prior session: claude --resume injects all prior turns automatically,
+    // so normally we skip scope assembly (it was already injected on the first turn).
+    // EXCEPTION: when the user has shifted canvas focus mid-chat (scope_uuid differs
+    // from previous_scope_uuid), we re-inject the new scope so the agent sees the
+    // contract body the user just highlighted — without this, the resumed session
+    // only knows the turn-1 scope and the agent answers from stale context.
+    // First-turn callers (resume_session_id None) run the full assembly path below.
+    let assembled_prompt = if resume_session_id.is_some() {
+        let scope_changed = match (scope_uuid.as_deref(), previous_scope_uuid.as_deref()) {
+            (Some(now), Some(prev)) => now != prev,
+            (Some(_), None) => true, // user picked a scope after an unscoped turn
+            _ => false,              // None on this turn → keep prior context
+        };
+        if scope_changed {
+            eprintln!(
+                "[run_agent] resume + scope changed (prev={:?} → now={:?}) — re-injecting scope context",
+                previous_scope_uuid, scope_uuid
+            );
+            match crate::agent::prompt_assembler::assemble_prompt(
+                &app,
+                &prompt,
+                scope_uuid.as_deref(),
+            )
+            .await
+            {
+                Ok(p) => p,
+                Err(e) => {
+                    eprintln!("[run_agent] scope re-injection FAILED: {} — falling back to raw prompt", e);
+                    prompt.clone()
+                }
+            }
+        } else {
+            eprintln!("[run_agent] resuming prior session — skipping scope assembly, using raw prompt");
+            prompt.clone()
+        }
+    } else {
+        // Assemble context-rich prompt from SQLite + sidecar reads (AGENT-01 invariant).
+        // Don't silently fall back on error — log the failure so we can see why scoping
+        // didn't work. Falling back to raw `prompt` strips scope context, which makes
+        // the agent answer as if no node were selected.
+        match crate::agent::prompt_assembler::assemble_prompt(
+            &app,
+            &prompt,
+            scope_uuid.as_deref(),
+        )
+        .await
+        {
+            Ok(p) => {
+                eprintln!(
+                    "[run_agent] assembled prompt ({} chars):\n----- BEGIN PROMPT -----\n{}\n----- END PROMPT -----",
+                    p.len(),
+                    p
+                );
+                p
+            }
+            Err(e) => {
+                eprintln!("[run_agent] assemble_prompt FAILED: {} — falling back to raw user prompt (NO SCOPE)", e);
+                prompt.clone()
+            }
+        }
+    };
+
+    // --- Snapshot ~/.claude/projects/<encoded-cwd>/ BEFORE spawn ---
+    // Fallback path for session-id discovery if stream doesn't expose it.
+    // (encoded_cwd + claude_projects_dir were resolved above for the
+    // resume-session validation; reuse them rather than recompute.)
     let pre_spawn_jsonl_names: std::collections::HashSet<String> =
         list_jsonl_names(&claude_projects_dir);
 
-    // Shared session_id discovered from stream events.
-    let stream_session_id: Arc<AsyncMutex<Option<String>>> = Arc::new(AsyncMutex::new(None));
+    // Shared session_id. When --resume-ing, pre-populate so the Terminated branch
+    // can locate the JSONL — claude appends to the existing session file rather than
+    // creating a new one, so the snapshot-diff fallback would not find it.
+    let stream_session_id: Arc<AsyncMutex<Option<String>>> = Arc::new(AsyncMutex::new(resume_session_id.clone()));
 
     // W3: capture spawn instant IMMEDIATELY before .spawn().
     let spawn_start = Instant::now();
@@ -159,10 +221,53 @@ pub async fn run_agent(
     if bare {
         claude_args.push("--bare".to_string());
     }
+
+    // Demo-clean defaults: kill MCP discovery and slash commands so chat runs
+    // are reproducible across machines and never surface unrelated tools
+    // mid-demo. We can't use --bare on OAuth (it requires ANTHROPIC_API_KEY),
+    // so we mimic the parts of its effect we can with explicit flags.
+    //
+    // Skipped when the caller (e.g. delegate) provides its own --mcp-config
+    // in extra_args — delegate intentionally loads the contract-ide MCP for
+    // tool-grounded execution. Detection is conservative: any presence of
+    // --mcp-config OR --strict-mcp-config in extras opts the caller out.
+    //
+    // Note: we used to also pass `--setting-sources project` to skip user-
+    // level skills/agents, but it caused the run to hang at startup on some
+    // configs (suspect: needed user settings for keychain/auth resolution).
+    // Reverted — user-level skills are still cosmetically present but the
+    // MCP zero-out + disable-slash-commands cover the demo-relevant surface.
+    let caller_handles_mcp = extra_args
+        .iter()
+        .any(|a| a == "--mcp-config" || a == "--strict-mcp-config");
+    if !caller_handles_mcp {
+        claude_args.push("--strict-mcp-config".to_string());
+        claude_args.push("--mcp-config".to_string());
+        claude_args.push(r#"{"mcpServers":{}}"#.to_string());
+        claude_args.push("--disable-slash-commands".to_string());
+    }
+
+    if let Some(ref sid) = resume_session_id {
+        claude_args.push("--resume".to_string());
+        claude_args.push(sid.clone());
+    }
     // Caller-provided extras (e.g. delegate_execute passes lean-mode flags +
     // a focused mcp-config that loads only the contract-ide MCP server,
     // skipping Chrome/Firebase/Scholar/etc to cut startup latency).
     claude_args.extend(extra_args);
+    eprintln!(
+        "[run_agent] spawning: claude {} (cwd={})",
+        claude_args
+            .iter()
+            .map(|a| if a.contains(' ') || a.contains('"') {
+                format!("{a:?}")
+            } else {
+                a.clone()
+            })
+            .collect::<Vec<_>>()
+            .join(" "),
+        repo_path.display()
+    );
     let (mut rx, child) = app
         .shell()
         .command("claude")
@@ -307,13 +412,16 @@ pub async fn run_agent(
                         map.remove(&tracking_id2);
                     }
 
-                    // Emit agent:complete.
+                    // Emit agent:complete. session_id is included so the frontend
+                    // can pass it as resume_session_id on the next turn — enables
+                    // multi-turn chat continuity via claude --resume.
                     let _ = app2.emit(
                         "agent:complete",
                         serde_json::json!({
                             "tracking_id": tracking_id2,
                             "code": payload.code,
                             "wall_time_ms": wall_time_ms,
+                            "session_id": session_id,
                         }),
                     );
 
@@ -326,6 +434,32 @@ pub async fn run_agent(
     });
 
     Ok(tracking_id)
+}
+
+/// Send SIGTERM to a running agent's claude process. The Terminated event
+/// will fire shortly after, draining the rest of the agent:complete pipeline
+/// (parse_and_persist, receipt:created emission). Frontend optimistically
+/// marks the run 'stopped' before this returns so the UI doesn't lag.
+///
+/// Returns Ok(true) if a child was found and kill signaled, Ok(false) if the
+/// run had already completed or wasn't tracked.
+#[tauri::command]
+pub async fn stop_agent(app: tauri::AppHandle, tracking_id: String) -> Result<bool, String> {
+    let state = app.state::<AgentRuns>();
+    let mut map = state.0.lock().await;
+    if let Some(child) = map.remove(&tracking_id) {
+        // CommandChild::kill consumes the handle.
+        if let Err(e) = child.kill() {
+            // Already exited, or kill signal failed — non-fatal; the
+            // Terminated branch in the drain task will still cleanup.
+            eprintln!("[stop_agent] kill {tracking_id} returned {e}");
+            return Ok(false);
+        }
+        eprintln!("[stop_agent] killed tracking_id={tracking_id}");
+        Ok(true)
+    } else {
+        Ok(false)
+    }
 }
 
 /// List all .jsonl filenames in a directory.

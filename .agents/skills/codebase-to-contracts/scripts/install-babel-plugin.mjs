@@ -108,13 +108,18 @@ function patchNextConfig(repoPath, snippet) {
     // Idempotent path: replace the existing block in-place.
     patched = original.slice(0, startIdx) + snippet + original.slice(endIdx + INSERT_END.length);
   } else {
-    // Fresh install: inject before the default export / module.exports.
-    const exportMatch = original.match(/^(export\s+default|module\.exports)/m);
-    if (exportMatch) {
-      const insertAt = original.indexOf(exportMatch[0]);
+    // Fresh install: inject BEFORE the nextConfig declaration so the const
+    // literal can reference contractUuidWebpackHook without TDZ. Falls back
+    // to `module.exports = {` (JS-style) and finally to `export default`
+    // (which is wrong for TDZ but only fires for unrecognized configs).
+    const declMatch = original.match(
+      /^const\s+nextConfig\b[^;]*=\s*\{|^module\.exports\s*=\s*\{|^(export\s+default)/m,
+    );
+    if (declMatch) {
+      const insertAt = original.indexOf(declMatch[0]);
       patched = original.slice(0, insertAt) + snippet + '\n\n' + original.slice(insertAt);
     } else {
-      // No recognizable export — append at end with a separating newline.
+      // No recognizable declaration — append at end with a separating newline.
       patched = original + '\n\n' + snippet + '\n';
     }
   }
@@ -154,19 +159,45 @@ function patchNextConfig(repoPath, snippet) {
 // Public entry point.
 // ---------------------------------------------------------------------------
 
+// Next.js 16 defaults to Turbopack and rejects custom `webpack` config
+// blocks at build time unless the `--webpack` (or `--turbopack`) flag is
+// passed explicitly. Our injected hook is webpack-only, so we patch the
+// target's `dev` and `build` scripts to add `--webpack` if not already
+// present. Idempotent: re-runs detect the existing flag and skip.
+function patchPackageScripts(repoPath) {
+  const pkgPath = resolve(repoPath, 'package.json');
+  if (!existsSync(pkgPath)) return { patched: false, reason: 'no package.json' };
+  const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+  if (!pkg.scripts) return { patched: false, reason: 'no scripts block' };
+  const changes = [];
+  for (const key of ['dev', 'build']) {
+    const script = pkg.scripts[key];
+    if (typeof script !== 'string') continue;
+    if (!/\bnext\s+(dev|build)\b/.test(script)) continue;
+    if (/--webpack\b|--turbopack\b/.test(script)) continue;
+    pkg.scripts[key] = script.replace(/\bnext\s+(dev|build)\b/, 'next $1 --webpack');
+    changes.push(key);
+  }
+  if (changes.length === 0) return { patched: false, reason: 'scripts already configured or no next dev/build scripts' };
+  writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+  return { patched: true, changes };
+}
+
 export function installBabelPlugin(repoPath) {
   const pluginDir = copyPluginScaffold(repoPath);
   const snippet = loadSnippetBody();
   const configResult = patchNextConfig(repoPath, snippet);
+  const scriptsResult = patchPackageScripts(repoPath);
 
   return {
     pluginDir,
     nextConfig: configResult,
+    packageScripts: scriptsResult,
   };
 }
 
 // Exposed for testing.
-export { copyPluginScaffold, loadSnippetBody, patchNextConfig, INSERT_START, INSERT_END };
+export { copyPluginScaffold, loadSnippetBody, patchNextConfig, patchPackageScripts, INSERT_START, INSERT_END };
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const repoPath = resolve(process.argv[2] || process.cwd());

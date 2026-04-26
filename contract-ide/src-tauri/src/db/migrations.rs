@@ -503,5 +503,52 @@ END;
 ALTER TABLE receipts ADD COLUMN substrate_rules_json TEXT;
 "#,
         kind: MigrationKind::Up,
+    },
+    Migration {
+        version: 9,
+        description: "chats_for_multi_tab_history",
+        sql: r#"
+-- Multi-chat tab support + History panel.
+--
+-- A chat = one logical conversation. When the user sends a follow-up turn,
+-- agent.rs passes --resume and claude reuses the same session JSONL, so a
+-- chat naturally maps 1:1 to a claude session_id. The receipts table has
+-- one row per agent run (per turn), all sharing the same session_id within
+-- a chat — receipts join via `claude_session_id`.
+--
+-- closed_at IS NULL → open tab in the right panel.
+-- closed_at NOT NULL → in the History panel (reopenable).
+CREATE TABLE IF NOT EXISTS chats (
+    id                TEXT PRIMARY KEY,
+    name              TEXT NOT NULL,
+    scope_uuid        TEXT REFERENCES nodes(uuid),
+    claude_session_id TEXT UNIQUE,
+    created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    closed_at         TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_chats_closed_at ON chats(closed_at);
+CREATE INDEX IF NOT EXISTS idx_chats_session   ON chats(claude_session_id);
+CREATE INDEX IF NOT EXISTS idx_chats_updated   ON chats(updated_at DESC);
+
+-- Backfill: every distinct session_id in receipts that has no chat row gets one,
+-- marked closed (closed_at = MAX receipt time) so old receipts show up in
+-- History rather than reappearing as live tabs on first boot post-migration.
+-- Name is a date-stamp placeholder; users can rename.
+-- Uses lower(hex(randomblob(8))) for a unique 16-hex-char id per row.
+INSERT INTO chats (id, name, claude_session_id, created_at, updated_at, closed_at)
+SELECT
+    'chat-' || lower(hex(randomblob(8))),
+    'Chat ' || substr(MIN(COALESCE(started_at, created_at)), 1, 10),
+    session_id,
+    MIN(COALESCE(started_at, created_at)),
+    MAX(COALESCE(finished_at, created_at)),
+    MAX(COALESCE(finished_at, created_at))
+FROM receipts
+WHERE session_id IS NOT NULL AND session_id != ''
+GROUP BY session_id;
+"#,
+        kind: MigrationKind::Up,
     }]
 }

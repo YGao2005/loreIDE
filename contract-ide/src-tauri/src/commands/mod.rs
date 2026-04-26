@@ -3,6 +3,7 @@
 // resolves those via the full `commands::<module>::<fn>` path, so we do
 // not re-export command fns here (pub use would elide the shim).
 pub mod agent;
+pub mod chats;
 pub mod cherrypick;
 pub mod contracts;
 pub mod delegate;

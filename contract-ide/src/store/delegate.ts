@@ -25,6 +25,7 @@
 import { create } from 'zustand';
 import { ipcDelegate, type SubstrateHit, type StructuredPlan } from '../ipc/delegate';
 import { useAgentStore } from './agent';
+import { createChat as createChatIpc } from '../ipc/chats';
 
 export type DelegateState =
   | { kind: 'idle' }
@@ -108,20 +109,42 @@ export const useDelegateStore = create<DelegateStore>((set, get) => ({
         assembledPrompt,
         atomUuid,
       );
-      // Seed the agent store with a kickoff payload BEFORE transitioning to
+      // Delegate runs land in their own chat tab so the kickoff card +
+      // streaming output don't shove an existing chat off-screen. The chat
+      // is auto-named from the plan's intent / atom; users can rename later.
+      const chatRow = await createChatIpc({
+        scopeUuid: scope_uuid,
+        name: deriveDelegateChatName(plan, atomUuid ?? scope_uuid),
+      }).catch((e) => {
+        console.warn('[delegate] createChat failed, falling back to active chat', e);
+        return null;
+      });
+      if (chatRow) {
+        useAgentStore.getState().upsertChatFromRow(chatRow, { activate: true });
+      }
+      // Seed the chosen chat with a kickoff payload BEFORE transitioning to
       // executing — ChatStream picks it up and renders the plan as a card at
       // the top of the run, so the agent's stream lands underneath it as a
       // continuous timeline.
-      useAgentStore.getState().startWithKickoff({
-        trackingId: tracking_id,
-        scopeUuid: scope_uuid,
-        kickoff: {
-          plan,
+      const targetChatId =
+        chatRow?.id ?? useAgentStore.getState().activeChatId;
+      if (targetChatId) {
+        useAgentStore.getState().startRunWithKickoff({
+          chatId: targetChatId,
+          trackingId: tracking_id,
           scopeUuid: scope_uuid,
-          atomUuid: atomUuid ?? scope_uuid,
-          assembledPrompt,
-        },
-      });
+          kickoff: {
+            plan,
+            scopeUuid: scope_uuid,
+            atomUuid: atomUuid ?? scope_uuid,
+            assembledPrompt,
+          },
+        });
+      } else {
+        // No chat to attach to — extremely defensive. Stream events will
+        // arrive but appendStream is a no-op without a trackingToChat entry.
+        console.error('[delegate] no chat available for kickoff run', tracking_id);
+      }
       set({ state: { kind: 'executing', scope_uuid, tracking_id } });
     } catch (e) {
       console.error('[delegate] execute failed', e);
@@ -175,3 +198,16 @@ export const useDelegateStore = create<DelegateStore>((set, get) => ({
     }
   },
 }));
+
+/** Build a chat tab title for a delegate run. Prefer the first target file
+ * (most informative); fall back to a short atom-uuid stamp. Truncated so the
+ * tab strip stays readable. */
+function deriveDelegateChatName(plan: StructuredPlan, atomUuid: string): string {
+  const file = plan.target_files[0];
+  if (file) {
+    const segments = file.split('/');
+    const tail = segments[segments.length - 1] || file;
+    return `Delegate · ${tail}`.slice(0, 48);
+  }
+  return `Delegate · ${atomUuid.slice(0, 8)}`;
+}

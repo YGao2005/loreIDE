@@ -69,6 +69,7 @@ pub fn run() {
             commands::drift::acknowledge_drift,
             commands::mcp::get_mcp_status,
             commands::agent::run_agent,
+            commands::agent::stop_agent,
             commands::receipts::list_receipts_for_node,
             commands::reconcile::accept_rollup_as_is,
             commands::reconcile::draft_propagation_diff,
@@ -137,49 +138,11 @@ pub fn run() {
             // missing-fixture state (Err with diagnostic, no panic).
             commands::demo_orchestration::load_beat3_verifier_fixture,
             commands::demo_orchestration::emit_beat4_harvest,
-            // Phase 13.5 sync-review reframe: unified PR-review fixture loader.
-            // Returns a single composite payload (commit metadata + blast
-            // radius + honors + implicit + harvested + flag) for the new
-            // sidebar Review tab; supersedes the split beat3/beat4 calls
-            // above (kept for backwards compat until the panel removal).
-            commands::demo_orchestration::load_sync_review_fixture,
             // Gap-closure: in-app Cmd+Shift+R hotkey support. Spawns
             // contract-ide/demo/reset-demo.sh; the script's pkill cascade
             // will SIGTERM this process before the child finishes, so the
             // command returns Ok on successful spawn rather than waiting.
             commands::reset_demo::reset_demo_state,
-            // Phase 15 Plan 03 — TRUST-02: refine path IPC.
-            // Wave-3 serialization_hint: appended AFTER all existing substrate
-            // commands (commands::substrate::find_substrate_by_intent is the last
-            // substrate entry above reset_demo). Do NOT reorder existing handlers.
-            commands::substrate_trust::refine_substrate_rule,
-            commands::substrate_trust::get_substrate_chain,
-            // Phase 15 Plan 04 — TRUST-03: delete path + impact preview IPC.
-            // Appended AFTER Plan 15-03's two substrate_trust entries per
-            // serialization-hint pattern — do NOT reorder existing handlers.
-            commands::substrate_trust::delete_substrate_rule,
-            commands::substrate_trust::get_substrate_impact,
-            // Phase 15 Plan 05 — TRUST-03 SC5 + TRUST-04: restore path + tombstoned list.
-            // Appended AFTER Plan 15-04's two entries per serialization-hint pattern.
-            // Final order: refine → get_chain → delete → get_impact → list_tombstoned → restore.
-            commands::substrate_trust::list_tombstoned_rules,
-            commands::substrate_trust::restore_substrate_rule,
-            // Multi-chat tabs + History panel (Phase A — appended after all
-            // existing handlers per the serialization-hint pattern). One
-            // command per chat lifecycle stage; reconstruction (read JSONL
-            // for a closed chat) lives under chats::read_chat_jsonl in
-            // Phase D and will be appended below this block.
-            commands::chats::create_chat,
-            commands::chats::list_open_chats,
-            commands::chats::list_history_chats,
-            commands::chats::close_chat,
-            commands::chats::reopen_chat,
-            commands::chats::rename_chat,
-            commands::chats::update_chat_session_id,
-            commands::chats::touch_chat,
-            commands::chats::delete_chat,
-            commands::chats::get_chat_receipts,
-            commands::chats::get_chat_summaries,
         ])
         .setup(|app| {
             let window = app

@@ -27,6 +27,9 @@ export interface AgentCompletePayload {
   tracking_id: string;
   code: number | null;
   wall_time_ms: number;
+  /** Claude session id captured from the run's stream. Pass back as
+   * `resumeSessionId` on the next turn to continue the conversation. */
+  session_id?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -53,6 +56,16 @@ export interface AgentCompletePayload {
 export interface RunAgentOptions {
   model?: string;
   effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+  /** When set, claude resumes the prior session (--resume) and treats `prompt`
+   * as the next user turn. The Rust side skips scope assembly in this case
+   * since the prior turns already injected the context — UNLESS
+   * `previousScopeUuid` differs from `scopeUuid`, in which case the new scope
+   * gets re-injected so the agent sees the user's mid-chat focus shift. */
+  resumeSessionId?: string | null;
+  /** Scope used on the prior turn in this chat (null on the first turn). When
+   * combined with `resumeSessionId`, lets the Rust runner detect a canvas
+   * focus shift and re-inject the new scope context. */
+  previousScopeUuid?: string | null;
 }
 
 export async function runAgent(
@@ -64,12 +77,29 @@ export async function runAgent(
   // Sending `scope_uuid` (snake_case) here would NOT map to the Rust
   // `scope_uuid` parameter — Tauri expects `scopeUuid` from JS. Mismatch
   // silently drops the value (Rust receives None).
+  // Treat empty / whitespace resume ids as absent — claude --resume errors
+  // out hard on empty values; Rust also validates JSONL existence so a
+  // dangling id just degrades to a fresh session instead of failing.
+  const rawResume = options.resumeSessionId;
+  const resumeSessionId =
+    typeof rawResume === 'string' && rawResume.trim() !== ''
+      ? rawResume
+      : undefined;
   return invoke<string>('run_agent', {
     prompt,
     scopeUuid,
     model: options.model,
     effort: options.effort,
+    resumeSessionId,
+    previousScopeUuid: options.previousScopeUuid ?? undefined,
   });
+}
+
+/** Send SIGTERM to a running agent. Returns true if a child was found and
+ * killed, false if the run had already completed or wasn't tracked. The
+ * normal `agent:complete` pipeline still fires (with non-zero exit code). */
+export async function stopAgent(trackingId: string): Promise<boolean> {
+  return invoke<boolean>('stop_agent', { trackingId });
 }
 
 // ---------------------------------------------------------------------------

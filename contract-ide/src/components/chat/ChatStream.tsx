@@ -102,8 +102,8 @@ function UserBubble({ text }: { text: string }) {
 
 function AssistantText({ text }: { text: string }) {
   return (
-    <div className="text-[12px] leading-relaxed text-foreground/90 whitespace-pre-wrap break-words">
-      {renderInline(text)}
+    <div className="text-[12px] leading-relaxed text-foreground/90 break-words space-y-1">
+      {renderBlocks(text)}
     </div>
   );
 }
@@ -374,6 +374,59 @@ function formatToolInput(name: string, input: Record<string, unknown>): string {
     if (lines.length > 0) return lines.join('\n');
   }
   return JSON.stringify(input, null, 2);
+}
+
+/**
+ * Block-level renderer: lines starting with `#`–`######` become heading blocks;
+ * runs of plain lines stay grouped together with whitespace-pre-wrap so existing
+ * line breaks are preserved. Inline tokens (code, bold) inside each block are
+ * delegated to `renderInline`.
+ *
+ * Markdown coverage is intentionally narrow — headers + the inline tokens
+ * already handled. Lists, links, blockquotes, etc. fall through as plain text;
+ * extend here when claude's output makes that visibly painful.
+ */
+function renderBlocks(text: string): ReactElement[] {
+  const lines = text.split('\n');
+  const out: ReactElement[] = [];
+  let buffer: string[] = [];
+
+  const flushBuffer = () => {
+    if (buffer.length === 0) return;
+    const joined = buffer.join('\n');
+    out.push(
+      <div key={`p-${out.length}`} className="whitespace-pre-wrap">
+        {renderInline(joined)}
+      </div>,
+    );
+    buffer = [];
+  };
+
+  for (const line of lines) {
+    const m = line.match(/^(#{1,6})\s+(.*)$/);
+    if (!m) {
+      buffer.push(line);
+      continue;
+    }
+    flushBuffer();
+    const level = m[1].length;
+    const content = m[2];
+    const cls =
+      level === 1
+        ? 'text-[15px] font-semibold mt-2 mb-0.5'
+        : level === 2
+          ? 'text-[13px] font-semibold mt-1.5 mb-0.5'
+          : level === 3
+            ? 'text-[12px] font-semibold mt-1 mb-0.5'
+            : 'text-[12px] font-medium text-foreground/85 mt-1 mb-0.5';
+    out.push(
+      <div key={`h-${out.length}`} className={cls}>
+        {renderInline(content)}
+      </div>,
+    );
+  }
+  flushBuffer();
+  return out;
 }
 
 /**

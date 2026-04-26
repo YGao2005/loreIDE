@@ -2,7 +2,7 @@
 
 **Runtime:** 4:00 — closed-loop demo across two physical laptops + one full-screen recorded segment
 **Speakers:** **NT** = non-technical (PM persona, NT laptop) · **T** = technical (developer persona, T laptop)
-**Staging:** two laptops on stage. Projector switches between them. NT laptop primary in Beat 1. Full-screen recording in Beat 2. T laptop primary in Beats 3–4. Speaker switching between laptops mirrors role switching between PM and developer.
+**Staging:** two laptops on stage, **both visible simultaneously** on the projector (split-screen feed). NT laptop primary in Beat 1. Full-screen recording takes over for Beat 2. Both laptops back in frame for Beats 3–4 — T's laptop is the focus, but NT's laptop stays visible so the audience can see the partner's commit "live" before T pulls it. Speaker switching mirrors role switching between PM and developer.
 **Scenario:** ✅ Locked 2026-04-24 — delete-account button (Account Settings page → workspace-delete on Beat 4). Full spec in `scenario-criteria.md` § Committed Scenario; investigation rationale in `SCENARIO-CANDIDATES.md`.
 **Visual model:** ✅ Locked 2026-04-24 — vertical flow chain on canvas with rendered iframe trigger + structured backend cards. Full spec in `../CANVAS-PURPOSE.md`. The PM in Beat 1 clicks the rendered danger-zone region directly; the section-level UUID chain (`data-contract-uuid` ↔ `code_ranges`) guarantees the agent edit lands in that section.
 
@@ -131,7 +131,7 @@ Animation: rules pop in as the substrate query returns them; ✓/✗ marks fill 
 
 ## 2:05–3:15 — Beat 3: Developer review (T laptop primary)
 
-**ON SCREEN:** projector switches to T's laptop. Contract IDE open at the L2 flow view for the delete-account flow — vertical participant chain visible top-to-bottom:
+**ON SCREEN:** both laptops remain visible. NT's laptop shows the post-Delegate state from Beat 1. T's laptop comes into focus on the right — Contract IDE open at the L2 flow view for the delete-account flow. Vertical participant chain visible on the canvas top-to-bottom:
 
 ```
    [ ▒ Account Settings — rendered iframe with new Delete button ▒ ]
@@ -156,57 +156,66 @@ Animation: rules pop in as the substrate query returns them; ✓/✗ marks fill 
    [ sendDeletionConfirmationEmail — lib ]
 ```
 
-The trigger card at top is the live iframe (Account Settings with new Delete Account button visible in the danger-zone section). Service cards below render in Stripe-API-docs style — method-colored badges, request/response schemas, side-effect lists. Edges between participants carry call-shape labels.
+The trigger card at top is the live iframe. The right sidebar has two tabs: **Inspector** and **Review**. The Review tab is selected and shows an empty state — "No incoming changes" with a primary **`Pull incoming changes`** button.
 
-**T:** "Now I'm the engineer. My machine. Same substrate, syncing from my partner's now."
+**T:** "Now I'm the engineer. My machine, on the right. My partner just pushed — let me pull."
 
-**ON SCREEN:** T clicks the **`Sync`** button. (Staging note: substrate is pre-loaded; the click animates the canvas updates that are already cached. Real-time multi-machine sync is deferred — `HANDOFF-demo-revision.md`.) The trigger card pulses (the new Delete button glows briefly), then service cards pulse in invocation order down the chain — `db.user.update` and `stripe.customers.update` and `mailchimp.suppress` light up sequentially. The flow itself is the blast radius made visible.
+**ON SCREEN:** T clicks **`Pull incoming changes`**. Brief spinner (~500ms — represents `git pull`; staging note: substrate is pre-loaded, the click hydrates from a fixture). Two things animate simultaneously:
 
-**T:** "Sync. Blast radius — visible top to bottom. I'm not opening a diff."
+- **Right sidebar:** Review tab populates with a PR-review-shaped surface, hydrated top-to-bottom (header → compact chain → honors → implicit decisions → flag).
+- **Main canvas:** blast-radius animation pulses through the chain — trigger card first (the new Delete button glows), then service cards in invocation order down the chain. The flow itself is the blast radius made visible.
 
-**ON SCREEN:** sidebar renders a 6-line intent summary, not a code diff. Each line ends with a citation token:
+**T:** "Pull. The review surface lands on the right; the chain on my canvas pulses top-to-bottom. Blast radius — visible. I'm not opening a diff file."
 
-```
-Added Delete Account action in the danger zone per contract update.
-Soft-delete with 30-day grace per dec-soft-delete-30day-grace-2026-02-18.
-Tax-held invoices anonymized per con-anonymize-not-delete-tax-held-2026-03-04.
-Stripe customer archived (not deleted) per con-stripe-customer-archive-2026-02-22.
-Mailing list suppressed per con-mailing-list-suppress-not-delete-2026-03-11.
-Email-link confirmation per dec-confirm-via-email-link-2026-02-18.
-```
-
-**T:** "Sidebar shows intent, not code. Each line cites the decision behind it."
-
-**ON SCREEN:** T clicks `[source]` next to the Stripe-archive line. Monaco opens in a side panel and scrolls to the `stripe.customers.update(... { metadata: { archived: 'true' }})` call in `lib/account/beginAccountDeletion.ts`. **Simultaneously the corresponding service card in the chain (`stripe.customers.update`) gains a soft halo**, visually anchoring the citation to the participant.
-
-**T:** "Citation jumps me to the code AND highlights the participant in the chain. Two clicks to investigate any decision in this PR."
-
-**ON SCREEN:** T clicks **`Verify against intent`**. Verifier panel streams green checks for each substrate constraint, then an "Implicit decisions" group surfacing agent defaults that no team rule applied to, then one orange flag with a halo:
+**ON SCREEN:** the Review tab settles. Header shows commit metadata (author: partner persona; message: *"Add Delete Account action to Settings danger zone"*; 5 files). Below the header, a **What rules were honored** section lists 6 ✓ rows, each with a `[source]` citation pill:
 
 ```
-✓ Matches contract — Delete Account action present in danger-zone section
-✓ dec-soft-delete-30day-grace honored — deletedAt set, no hard delete
-✓ con-anonymize-not-delete-tax-held honored — invoice updateMany present
-✓ con-stripe-customer-archive honored — customers.update with metadata
-✓ con-mailing-list-suppress-not-delete honored — mailchimp suppress call
-✓ dec-confirm-via-email-link honored — sendDeletionConfirmationEmail call
+✓ Matches contract — Delete Account action in danger-zone section            [source]
+✓ dec-soft-delete-30day-grace honored — deletedAt set, no hard delete         [source]
+✓ con-anonymize-not-delete-tax-held honored — invoice updateMany present     [source]
+✓ con-stripe-customer-archive honored — customers.update with metadata       [source]
+✓ con-mailing-list-suppress-not-delete honored — mailchimp suppress call     [source]
+✓ dec-confirm-via-email-link honored — sendDeletionConfirmationEmail call    [source]
+```
 
-ℹ Implicit decisions surfaced (no team rule applied)
-  • Email link expires in 24h — agent default
-  • Audit log written to `audit_log` table — inferred from project schema
-  • Cleanup runs as background job — derived from contract.role "primary action"
+T clicks `[source]` next to the Stripe-archive line. **The center pane opens Monaco** and scrolls to the `stripe.customers.update(... { metadata: { archived: 'true' }})` call in `lib/account/beginAccountDeletion.ts`. **Simultaneously the corresponding service card in the chain on the canvas gains a soft halo.** The Review sidebar stays anchored on the right — no popups, nothing replaced.
 
+**T:** "Six rules honored, all from the same February incident thread. Click a citation — Monaco in the center, halo on the participant in the chain, review stays put on the right. Two clicks to investigate any decision."
+
+**ON SCREEN:** T scrolls the Review tab to the next section: **Implicit decisions surfaced** — agent defaults that no team rule covered. Three rows, each with a freeform textarea labeled *"Verify with agent"*:
+
+```
+ℹ Email link expires in 24h — agent default                          [Verify with agent ▾]
+ℹ Audit log written to `audit_log` table — inferred from schema      [Verify with agent ▾]
+ℹ Cleanup runs as background job — from contract.role "primary"      [Verify with agent ▾]
+```
+
+T clicks the first row's textarea, types: *"show me where the agent set this and why."* Hits enter. The row expands inline; an agent response streams below the question (composed from the implicit-decision text + atom context + relevant code citations):
+
+```
+The 24-hour expiry is set in lib/account/beginAccountDeletion.ts:42 via
+TOKEN_EXPIRY_HOURS = 24. No team rule covered link expiry, so the agent
+chose 24h based on the contract's "30-day grace" framing — a confirmation
+flow shorter than the grace window. Want me to derive a candidate rule
+from this? [Promote to substrate]
+```
+
+**T:** "Implicit decisions are where most tools stop — they show you a list and walk away. Mine lets me interrogate any of them, inline. The agent answers with the code reference and its reasoning. That's verification — not just summary."
+
+**ON SCREEN:** T scrolls to the bottom of the Review tab: **Needs attention** — one orange ⚠ row:
+
+```
 ⚠ Parent surface (Account Settings) holds con-settings-no-modal-interrupts-2025-Q4
   ("no modal interrupts on user actions") — derived 2025-Q4 under priority
   `reduce-onboarding-friction`. Current priority since 2026-04-24 is
   `compliance-first`. The new modal interrupt may be intended; review.
 ```
 
-**On the canvas, the orange halo lands on the Account Settings trigger card itself** — the parent surface where the conflicting constraint lives. The level of the conflict is visible at a glance, not buried in a list.
+**On the canvas, an orange halo lands on the Account Settings trigger card itself** — the parent surface where the conflicting constraint lives. The level of the conflict is visible at a glance.
 
-**T:** "Six rules honored. Three implicit defaults — fine. Orange flag — and the halo's on the screen card, not a service. That tells me it's a parent-surface issue: a no-modal-interrupts rule from Q4, made under the old reduce-friction priority. We shifted to compliance-first three weeks ago. The verifier caught a stale priority — tests didn't catch it, CI didn't catch it. No fact-level memory tool can do this; they don't know what changed and when. This is the moat."
+**T:** "And there's one orange flag — halo's on the screen card, not a service. Parent-surface issue: no-modal-interrupts rule from Q4, made under the old reduce-friction priority. We shifted to compliance-first three weeks ago. Stale priority. Tests didn't catch it. CI didn't catch it. No fact-level memory tool can do this — they don't know what changed and when. This is the moat."
 
-**ON SCREEN:** T clicks the flag. Side panel opens with priority history (Q4-2025 `reduce-onboarding-friction` → 2026-04-24 `compliance-first`). T types: *"Destructive actions require confirmation modals; the no-modal rule applies to non-destructive Settings interactions only. Narrowing the parent constraint."* Clicks Accept. Orange halo on the screen card clears. T clicks Merge. Canvas resolves; chain settles green.
+**ON SCREEN:** T clicks the flag. The row expands inline with priority history (Q4-2025 `reduce-onboarding-friction` → 2026-04-24 `compliance-first`) and a narrowing textarea. T types: *"Destructive actions require confirmation modals; the no-modal rule applies to non-destructive Settings interactions only. Narrowing the parent constraint."* Clicks Accept. Orange halo on the screen card clears. T clicks **Merge**. The Review tab collapses; canvas chain settles green.
 
 **T:** "Scope narrowed. Note captured into the substrate. Merge."
 
@@ -214,7 +223,7 @@ Email-link confirmation per dec-confirm-via-email-link-2026-02-18.
 
 ## 3:15–3:50 — Beat 4: Closed loop (T laptop + brief recorded inset)
 
-**ON SCREEN:** notification slides into T's canvas:
+**ON SCREEN:** with the Beat 3 review merged, the Review tab on T's laptop returns to its empty state ("No incoming changes · `Pull incoming changes`"). A brief capture toast slides in over the canvas:
 
 ```
 5 nodes captured from this session
@@ -265,13 +274,9 @@ Substrate query streams. **All five rules from this morning surface again** — 
 
 The two ghost-ref participants (`stripe.customers.update`, `mailchimp.suppress`) render with a faded outline and the morning's atom chips still attached — visually obvious that the same services are being reused. The two new lib cards (`revokeAllMemberTokens`, `assertNotSoleOwner`) render fresh.
 
-**NT:** "Different surface. Same intent. The agent never re-discovered any of it. Stripe and Mailchimp show up as ghosts — same services we taught it about this morning. The two new ones got new logic."
+**T:** "Agent finished. Same gesture — pull."
 
-**ON SCREEN:** ⏵ Brief recorded inset (8s, full-screen): bare Claude on the same prompt. Greps for `Workspace`, writes a `<DangerActionButton confirmation="modal">` that calls `fetch('/api/team/${slug}', { method: 'DELETE' })` against an endpoint that doesn't exist. Same shape of failure as this morning, on a new surface. Receipt: **15 tool calls · 743k context read · 0/5 rules honored.**
-
-**T:** [over inset] "Vanilla on the same task. Starts blind. Same one-line wrong answer. The substrate compounds; vanilla doesn't."
-
-**ON SCREEN:** cut back to T's laptop. Three new substrate atom chips animate into the canvas — landing on the participants they live on, not into a generic harvest panel:
+**ON SCREEN:** T clicks **`Pull incoming changes`** in the empty Review tab. The same review surface hydrates again on the right — second visit, fresh payload. Header shows the new commit (author: T's local agent run; message: *"Add Delete Workspace action to Team Settings"*; 5 files). Honors section lists **the same 5 rules cited again** from the morning's substrate, each with `[source]` pills. Then a new section appears: **New rules learned** — three harvested atom rows that animate into the sidebar AND drop chips onto the canvas participants they attach to:
 
 ```
 + con-cascade-revoke-tokens-on-org-delete-2026-04-25       →  attached to revokeAllMemberTokens
@@ -286,7 +291,11 @@ The two ghost-ref participants (`stripe.customers.update`, `mailchimp.suppress`)
    reviewer accepted, now a team rule."
 ```
 
-**T:** "Three new rules. Two from workspace-delete code, attached to the new lib cards. One promoted — agent's morning default, reviewer accepted, now a team rule, attached to the email-confirmation participant. The substrate compounds three different ways, and each rule lands on the participant it lives on, not in some abstract list."
+**NT:** "Different surface. Same intent. The agent never re-discovered any of it. Stripe and Mailchimp show up as ghosts on the canvas — same services we taught it about this morning. The five morning rules cited again on the right. And three new rules harvested, each landing on the participant it lives on."
+
+**ON SCREEN:** ⏵ Brief recorded inset (8s, full-screen): bare Claude on the same prompt. Greps for `Workspace`, writes a `<DangerActionButton confirmation="modal">` that calls `fetch('/api/team/${slug}', { method: 'DELETE' })` against an endpoint that doesn't exist. Same shape of failure as this morning, on a new surface. Receipt: **15 tool calls · 743k context read · 0/5 rules honored.**
+
+**T:** [over inset] "Vanilla on the same task. Starts blind. Same one-line wrong answer. The substrate compounds three different ways — rules cited, services reused, new rules harvested. Vanilla doesn't compound at all."
 
 ---
 
@@ -313,11 +322,13 @@ The two ghost-ref participants (`stripe.customers.update`, `mailchimp.suppress`)
 - Beat 2 fully recorded (not live agent execution)
 - Retrieval-mechanism narration content (graph-anchored, applies-when matching, LLM re-ranking)
 - **Beat 2 visual addition: live iframe re-render on the IDE side as the agent completes** (Delete button materializes in the danger-zone section in real time during the recording)
-- `Sync` button as Beat 3 entry (mocked; real multi-machine sync deferred)
-- **Beat 3 blast-radius animation: trigger card pulses + service cards pulse in invocation order down the chain** (replaces "three abstract nodes pulse")
-- Two-clicks-to-investigate citation pattern in Beat 3 sidebar
-- **Beat 3 citation halo: clicking `[source]` highlights both the Monaco line AND the corresponding service card in the chain**
-- **Beat 3 orange-flag placement: halo lands on the screen card itself** (parent-surface conflict is visually obvious at the level it lives)
+- **Sync as `Pull incoming changes` button inside the Review sidebar tab's empty state** (represents `git pull`; mocked from fixture, real multi-machine sync deferred). No standalone Sync button on the canvas.
+- **Beat 3 / Beat 4 review surface: right-sidebar Review tab** that hydrates with a PR-review-shaped layout (header → honors → implicit decisions → flag in Beat 3; header → honors → harvested rules in Beat 4). Replaces the prior `VerifierPanel` / `HarvestPanel` floating popups. Citations and "Where in code?" open Monaco in the center pane while the Review tab stays anchored on the right.
+- **Beat 3 blast-radius animation on Pull: chain in the sidebar hydrates top-to-bottom AND service cards on the canvas pulse in invocation order**
+- Two-clicks-to-investigate citation pattern: `[source]` opens Monaco in center + halos the participant on canvas; sidebar review stays put
+- **Beat 3 implicit-decisions group includes per-row `Verify with agent` textareas** that expand inline with a streaming agent response (fixture-streamed for v1 determinism). This is the moment the audience sees verification *happen*, not just sees output.
+- **Beat 3 orange-flag placement: halo lands on the screen card itself** (parent-surface conflict is visually obvious at the level it lives); flag row expands inline with priority history + narrowing textarea (no separate modal)
+- **Beat 4 reuses the same Review tab** — second `Pull incoming changes` click hydrates the workspace-delete review with the 5 morning rules cited again + 3 newly harvested rules. Same surface, different payload — proves it's reusable, not a one-off.
 - Devin/Windsurf complementary close
 - **Scenario: delete-account → workspace-delete** (per `scenario-criteria.md` § Committed Scenario)
 - **PM contract body** (Intent + Role + 2 Examples) — see Beat 1 above; the `## Role` line is what positions the button at the bottom of the section

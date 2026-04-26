@@ -104,6 +104,8 @@ List the implicit decisions you made — defaults you picked that no substrate r
         Some("medium".to_string()),
         Some(extra_args),
         substrate_rules_json,   // Phase 15: threaded to receipts.substrate_rules_json
+        None,                   // resume_session_id: delegate runs are always one-shot
+        None,                   // previous_scope_uuid: not applicable for one-shot
     )
     .await?;
 

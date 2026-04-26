@@ -1,24 +1,21 @@
-import { useGraphStore } from '@/store/graph';
+import { useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { ChatPanel } from './ChatPanel';
-import ReceiptsTab from '@/components/inspector/ReceiptsTab';
+import { HistoryPanel } from '@/components/history/HistoryPanel';
+import { SyncReviewPanel } from '@/components/sync-review/SyncReviewPanel';
+import { useSyncReviewStore } from '@/store/syncReview';
 
 /**
  * Right-hand sidebar — tabbed agent surface.
  *
- *   [ Chat | Receipts ]
+ *   [ Chat | History | Review ]
  *
- * Sits at full window height, mirrors the left Sidebar width axis but on the
- * right edge. Receipts moved out of Inspector tabs (which now lives at the
- * bottom and focuses on per-node detail). Both tabs share the selected node
- * as their scope.
- *
- * Tab state is owned here (not lifted) — CommandPalette → focus-chat goes
- * through AppShell's panelRef.expand() + the `activeTab` prop drilled in
- * via `forceTab` on Cmd+K trigger.
+ * History (formerly Receipts) lists closed chats; receipts now fold under
+ * each chat row that produced them. Review tab (Phase 13.5) hosts the
+ * PR-review surface; auto-activates when a sync-review payload hydrates.
  */
-export type RightPanelTab = 'Chat' | 'Receipts';
-const TABS: RightPanelTab[] = ['Chat', 'Receipts'];
+export type RightPanelTab = 'Chat' | 'History' | 'Review';
+const TABS: RightPanelTab[] = ['Chat', 'History', 'Review'];
 
 export interface RightPanelProps {
   activeTab: RightPanelTab;
@@ -26,14 +23,21 @@ export interface RightPanelProps {
 }
 
 export function RightPanel({ activeTab, onTabChange }: RightPanelProps) {
-  const selectedNodeUuid = useGraphStore((s) => s.selectedNodeUuid);
-  const nodes = useGraphStore((s) => s.nodes);
-  const selectedNode = nodes.find((n) => n.uuid === selectedNodeUuid) ?? null;
+  const reviewPayload = useSyncReviewStore((s) => s.payload);
+
+  // Auto-switch to Review tab when a payload hydrates from a Pull, so the
+  // user lands on the surface without manually clicking the tab.
+  useEffect(() => {
+    if (reviewPayload && activeTab !== 'Review') {
+      onTabChange('Review');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reviewPayload]);
 
   return (
-    <div className="h-full w-full bg-background border-l border-border/50 flex flex-col">
-      {/* Tab strip — matches Inspector pattern */}
-      <div className="flex items-center gap-1 border-b border-border/50 px-3 py-2 shrink-0">
+    <div className="h-full w-full bg-background border-l border-border flex flex-col">
+      {/* Tab strip */}
+      <div className="flex items-center gap-1 border-b border-border px-3 py-2 shrink-0">
         {TABS.map((tab) => (
           <button
             key={tab}
@@ -54,7 +58,10 @@ export function RightPanel({ activeTab, onTabChange }: RightPanelProps) {
       {/* Tab body */}
       <div className="flex-1 flex flex-col min-h-0">
         {activeTab === 'Chat' && <ChatPanel />}
-        {activeTab === 'Receipts' && <ReceiptsTab node={selectedNode} />}
+        {activeTab === 'History' && (
+          <HistoryPanel onReopen={() => onTabChange('Chat')} />
+        )}
+        {activeTab === 'Review' && <SyncReviewPanel />}
       </div>
     </div>
   );
