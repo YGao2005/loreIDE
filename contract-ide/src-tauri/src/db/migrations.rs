@@ -442,5 +442,66 @@ CREATE INDEX IF NOT EXISTS idx_intent_drift_verdicts_shift
     ON intent_drift_verdicts(priority_shift_id);
 "#,
         kind: MigrationKind::Up,
+    },
+    // WARNING: v8 is immutable once shipped. Do NOT modify sql or description.
+    // Phase 15 Plan 15-01 — substrate trust surface: chained-version self-FK,
+    // substrate_edits audit table, FTS5 tombstone trigger fix,
+    // receipts.substrate_rules_json column for TRUST-03 impact preview.
+    Migration {
+        version: 8,
+        description: "phase15_substrate_trust_surface",
+        sql: r#"
+-- Phase 15 TRUST-02: chained-version columns on substrate_nodes.
+-- Both columns are nullable so existing rows remain valid (no DEFAULT needed).
+-- prev_version_uuid self-FK records which row this row supersedes (the chain link).
+-- invalidated_reason carries a human/agent note written by the refine/delete/restore IPC.
+ALTER TABLE substrate_nodes ADD COLUMN prev_version_uuid TEXT REFERENCES substrate_nodes(uuid);
+ALTER TABLE substrate_nodes ADD COLUMN invalidated_reason TEXT;
+
+-- Phase 15 TRUST-04: full audit log of every refine/delete/restore operation.
+-- edit_id is caller-generated (UUIDv4). rule_uuid is the logical rule identity
+-- (the UUID of the *original* row in the chain). before_text/after_text give a
+-- human-readable diff. kind CHECK prevents malformed writes.
+CREATE TABLE IF NOT EXISTS substrate_edits (
+    edit_id           TEXT PRIMARY KEY,
+    rule_uuid         TEXT NOT NULL,
+    prev_version_uuid TEXT,
+    new_version_uuid  TEXT,
+    actor             TEXT NOT NULL,
+    edited_at         TEXT NOT NULL,
+    before_text       TEXT,
+    after_text        TEXT,
+    reason            TEXT NOT NULL,
+    kind              TEXT NOT NULL CHECK(kind IN ('refine', 'delete', 'restore'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_substrate_edits_rule_uuid ON substrate_edits(rule_uuid);
+CREATE INDEX IF NOT EXISTS idx_substrate_edits_edited_at ON substrate_edits(edited_at);
+
+-- Phase 15 TRUST-02 (Pitfall 1 fix): Replace the substrate_nodes UPDATE trigger so
+-- tombstoned rows (invalid_at NOT NULL after update) are REMOVED from the FTS index
+-- and NOT re-inserted. The old v6 trigger unconditionally re-inserted new.* after
+-- every UPDATE, meaning a tombstoned row kept appearing in FTS searches.
+--
+-- DROP TRIGGER must precede CREATE TRIGGER (SQLite has no CREATE OR REPLACE TRIGGER).
+DROP TRIGGER IF EXISTS substrate_nodes_au;
+CREATE TRIGGER substrate_nodes_au AFTER UPDATE ON substrate_nodes BEGIN
+    -- Remove the old row text from the FTS index.
+    INSERT INTO substrate_nodes_fts(substrate_nodes_fts, rowid, uuid, text, applies_when, scope)
+    VALUES ('delete', old.rowid, old.uuid, old.text, old.applies_when, old.scope);
+    -- Re-insert the new row ONLY if it is still current (not tombstoned).
+    -- WHERE new.invalid_at IS NULL is the FTS tombstone guard.
+    INSERT INTO substrate_nodes_fts(rowid, uuid, text, applies_when, scope)
+    SELECT new.rowid, new.uuid, new.text, new.applies_when, new.scope
+    WHERE new.invalid_at IS NULL;
+END;
+
+-- Phase 15 TRUST-03: thread substrate hit UUIDs from delegate prompt composition
+-- all the way to the receipts row so the impact preview can count real recent
+-- prompts that included a given substrate rule.
+-- Column is nullable: chat-path receipts (no delegate) will have NULL here.
+ALTER TABLE receipts ADD COLUMN substrate_rules_json TEXT;
+"#,
+        kind: MigrationKind::Up,
     }]
 }
