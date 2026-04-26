@@ -24,15 +24,13 @@ import { Sidebar } from './Sidebar';
 import { GraphPlaceholder } from './GraphPlaceholder';
 import { Inspector } from './Inspector';
 import { RightPanel, type RightPanelTab } from './RightPanel';
-import { McpStatusIndicator } from './McpStatusIndicator';
-import { SessionStatusIndicator } from './SessionStatusIndicator';
-import { SubstrateStatusIndicator } from './SubstrateStatusIndicator';
 import { BackfillModal } from '@/components/session';
 import { CommandPalette } from '@/components/command-palette/CommandPalette';
 import { IntentPalette } from '@/components/command-palette/IntentPalette';
 import { MassEditTrigger } from '@/components/mass-edit/MassEditTrigger';
 import { PRReviewPanel } from '@/components/substrate/PRReviewPanel';
 import { SyncButton } from '@/components/substrate/SyncButton';
+import { VerifyAgainstIntentButton } from '@/components/substrate/VerifyAgainstIntentButton';
 import { VerifierPanel } from '@/components/substrate/VerifierPanel';
 import { HarvestPanel } from '@/components/substrate/HarvestPanel';
 // Phase 13 Plan 10b: dev-mode rehearsal panel — single-click beat triggers
@@ -533,7 +531,14 @@ export function AppShell() {
             IPC → staggered blast-radius animation across the chain. Plan
             13-10b will swap the IPC's placeholder uuids for fixture-loaded
             ones; the button itself does not change. */}
-        <div className="fixed top-9 right-4 z-30">
+        {/* Gap-closure (post-13-11): `Verify against intent` product affordance.
+            Sibling of SyncButton — together they form the chain-level action
+            cluster called for by Beat 3 of presentation-script.md. The button
+            triggers loadAndApplyBeat3Verifier (the same fixture path used by
+            DemoOrchestrationPanel + window.__demo); VerifierPanel mounts as
+            a result of useVerifierStore.setResults flipping `open: true`. */}
+        <div className="fixed top-9 right-4 z-30 flex items-center gap-2">
+          <VerifyAgainstIntentButton />
           <SyncButton />
         </div>
 
@@ -562,16 +567,6 @@ export function AppShell() {
             opt-in: nothing ingests without explicit user confirmation. */}
         <BackfillModal />
 
-        {/* Status bar footer — MCP health (Plan 05-01) + Session watcher (Plan 10-04)
-            + Substrate counter (Plan 11-05). Sits outside the panel group so it is
-            never resized away. */}
-        <footer className="fixed bottom-0 right-0 z-10 flex items-center gap-2 border-l border-t border-border/40 bg-background/80 backdrop-blur-sm">
-          <McpStatusIndicator />
-          <span className="h-3 w-px bg-border/60" aria-hidden />
-          <SessionStatusIndicator />
-          <span className="h-3 w-px bg-border/60" aria-hidden />
-          <SubstrateStatusIndicator />
-        </footer>
       </div>
     </ReactFlowProvider>
   );
