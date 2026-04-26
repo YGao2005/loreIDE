@@ -348,7 +348,7 @@ Phases execute in numeric order; Phase 5 can run in parallel with Phase 3 after 
 
 Plans:
 - [ ] 14-01-PLAN.md — Wave 1: Skill foundation (SKILL.md + references + JSON schemas + helper scripts + verbatim Babel plugin template) [BOOTSTRAP-01]
-- [ ] 14-02-PLAN.md — Wave 1: Demo target codebase (Next.js + Prisma + Stripe + auth + email notes-app micro-SaaS at /Users/yang/lahacks/bootstrap-demo-target/) [BOOTSTRAP-05] — has checkpoint:decision for target choice
+- [x] 14-02-PLAN.md — Wave 2: Demo target codebase = **Marginalia** (Yang-built micro-SaaS at /Users/yang/lahacks/bootstrap-demo-target/ — Next.js 16 + Prisma 7 + argon2 sessions + Stripe + Resend + 8 shadcn components; 51 src files; 16 organic commits over 21d; no .contracts/ yet) [BOOTSTRAP-05] — Yang ratified option-a at checkpoint
 - [ ] 14-03-PLAN.md — Wave 2: Stage 1 (Discover) + Stage 2 (Derive frontmatter) — heuristic classification + per-node claude -p --json-schema with hash-skip + pre-flight cost estimator [BOOTSTRAP-02]
 - [ ] 14-04-PLAN.md — Wave 3: Stage 3 (Derive body) + Stage 4 (Align JSX code_ranges) — body sections + AST-walk JSX alignment with refuse-on-no-match [BOOTSTRAP-02]
 - [ ] 14-05-PLAN.md — Wave 4: Stage 5a (Synthesize flows) + Stage 5b (Atomic emit + Babel install + validator gate) [BOOTSTRAP-02, BOOTSTRAP-03, BOOTSTRAP-04]
