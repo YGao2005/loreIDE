@@ -76,7 +76,7 @@ patterns-established:
 requirements-completed: []  # SUB-06 was closed by 12-02; SUB-07 was closed by 12-03; 12-04 has no own requirements (it's the regression harness + demo backstop, not a requirement closer per se). Plan frontmatter lists [SUB-06, SUB-07] for traceability — they're already marked complete via prior plans. Re-marking is a no-op.
 
 # Metrics
-duration: 11min  # Tasks 1+2 + UAT.md authoring; Task 3 sign-off pending separately
+duration: 11min  # Tasks 1+2 + UAT.md authoring; Task 3 sign-off captured 2026-04-25 post-live-UAT
 completed: 2026-04-25
 ---
 
@@ -87,18 +87,18 @@ completed: 2026-04-25
 ## Status
 
 - **Tasks 1 + 2:** COMPLETE — adversarial harness + 5 + 1 fixtures committed (`abde980`); Beat 3 backstop committed (`0999e8c`).
-- **Task 3 (UAT human-verify checkpoint):** UAT.md DELIVERABLE COMMITTED (`20158ea`); SIGN-OFF PENDING. Yang runs through 12-UAT.md (SC1, SC2, SC3, Beat 3 dual-path) and types "approved" — the orchestrator's continuation agent then patches in actual harness numbers below.
+- **Task 3 (UAT human-verify checkpoint):** COMPLETE — UAT.md DELIVERABLE COMMITTED (`20158ea`); demo-critical UAT items run live in-app and APPROVED by Yang on 2026-04-25 (commit `1fef452` captures the live verification). Beat 3 dual-path GREEN; harness numbers 1.00/1.00 fact + 10/10 intent + d8 NEEDS_HUMAN_REVIEW @ 0.50 captured in commit `1fef452`. One implementation bug (walker.rs `rollup_inputs` → `rollup_inputs_json`) discovered + fixed inline at commit `358a252`.
 
 ## Performance
 
 - **Duration (Tasks 1 + 2 + UAT.md authoring):** 11 min
 - **Started:** 2026-04-25T20:24:18Z
 - **Tasks 1+2 completed:** 2026-04-25T20:35:46Z
-- **Task 3 sign-off completed:** _pending Yang's UAT pass_
-- **Tasks executed by executor:** 2 of 3 (Task 3 is checkpoint:human-verify)
-- **Files changed:** 13 (3 modified, 10 created)
+- **Task 3 sign-off completed:** 2026-04-25 (Yang approved Beat 3 dual-path live; UAT outcomes captured in commit `1fef452`)
+- **Tasks executed by executor:** 3 of 3 (Task 3 sign-off captured post-checkpoint)
+- **Files changed:** 13 (3 modified, 10 created) + walker.rs follow-up fix
 - **Tests added:** 4 (2 sanity tests in plain `cargo test` + 2 LLM-gated tests with #[ignore] + CI_LLM_LIVE=1)
-- **Commits:** 3 (Task 1, Task 2, Task 3 deliverable) + 1 metadata commit pending
+- **Commits:** 5 (Task 1 `abde980`, Task 2 `0999e8c`, Task 3 deliverable `20158ea`, Live UAT outcomes `1fef452`, walker.rs fix `358a252`) + plan-closure metadata commit (this commit)
 
 ## Accomplishments (Tasks 1 + 2)
 
@@ -339,11 +339,11 @@ A top-level `12-SUMMARY.md` (Phase 12 plan-aggregator) is OPTIONAL per existing 
 *Phase: 12-conflict-supersession-engine*
 *Plan: 04*
 *Tasks 1+2 completed: 2026-04-25*
-*Task 3 sign-off: pending Yang's UAT pass*
+*Task 3 sign-off: 2026-04-25 (Yang approved Beat 3 dual-path live; harness 1.00/1.00 fact + 10/10 intent)*
 
-## Self-Check: PASSED (for Tasks 1+2 portion)
+## Self-Check: PASSED
 
-All claimed files exist on disk; all claimed commits exist in git history. Task 3 sign-off section is intentionally blank pending Yang's UAT.
+All claimed files exist on disk; all claimed commits exist in git history. Task 3 UAT sign-off captured live by Yang on 2026-04-25 (commit `1fef452`).
 
 - FOUND: `contract-ide/src-tauri/tests/fact_supersession_tests.rs` — created
 - FOUND: `contract-ide/src-tauri/tests/intent_supersession_tests.rs` — created
