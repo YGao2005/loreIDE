@@ -137,11 +137,23 @@ pub fn run() {
             // missing-fixture state (Err with diagnostic, no panic).
             commands::demo_orchestration::load_beat3_verifier_fixture,
             commands::demo_orchestration::emit_beat4_harvest,
+            // Phase 13.5 sync-review reframe: unified PR-review fixture loader.
+            // Returns a single composite payload (commit metadata + blast
+            // radius + honors + implicit + harvested + flag) for the new
+            // sidebar Review tab; supersedes the split beat3/beat4 calls
+            // above (kept for backwards compat until the panel removal).
+            commands::demo_orchestration::load_sync_review_fixture,
             // Gap-closure: in-app Cmd+Shift+R hotkey support. Spawns
             // contract-ide/demo/reset-demo.sh; the script's pkill cascade
             // will SIGTERM this process before the child finishes, so the
             // command returns Ok on successful spawn rather than waiting.
             commands::reset_demo::reset_demo_state,
+            // Phase 15 Plan 03 — TRUST-02: refine path IPC.
+            // Wave-3 serialization_hint: appended AFTER all existing substrate
+            // commands (commands::substrate::find_substrate_by_intent is the last
+            // substrate entry above reset_demo). Do NOT reorder existing handlers.
+            commands::substrate_trust::refine_substrate_rule,
+            commands::substrate_trust::get_substrate_chain,
         ])
         .setup(|app| {
             let window = app

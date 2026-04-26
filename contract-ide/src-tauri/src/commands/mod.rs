@@ -29,6 +29,7 @@ pub mod session;
 pub mod sidebar;
 pub mod substrate;
 pub mod substrate_panel;
+pub mod substrate_trust;
 pub mod supersession;
 pub mod sync;
 pub mod validation;
