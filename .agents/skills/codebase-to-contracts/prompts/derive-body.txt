@@ -1,0 +1,151 @@
+# Stage 3 — Derive Contract Body
+
+You are deriving the BODY content of a Contract IDE format-v3 sidecar
+contract for a single node in a target codebase. The frontmatter
+(uuid / kind / level / route / code_ranges / parent / etc.) has ALREADY
+been written by Stage 2. You write only the markdown sections that follow
+the closing `---` of the frontmatter.
+
+Your output is a single JSON object that conforms to
+`schemas/contract-body.json`. The skill's renderer composes the resulting
+markdown body in this fixed section order:
+
+  ## Intent
+  ## Role
+  (## Inputs / ## Outputs / ## Side effects   — backend kinds only)
+  (## Examples                                 — UI L4 atoms only)
+  (## Notes                                    — flow + UI L3 only)
+
+You are NOT writing frontmatter. You are NOT writing the section headers
+themselves (the renderer adds them). You ARE writing the prose body of
+each section as plain string fields in the JSON output.
+
+----------------------------------------------------------------------
+SECTION A — MISSION
+
+Match the prose density, sentence rhythm, and specificity of the four
+exemplars at the bottom of this prompt. They are NOT illustrative — they
+are the literal target. If your output reads vaguer than these
+exemplars (too short, too generic, lacking the specific behavior callouts
+like "Soft-deletes by setting deletedAt rather than removing the row"
+instead of "Deletes the user"), it will be rejected at the prose-quality
+gate and you will be re-run.
+
+The exemplars come from contract-ide-demo/.contracts/ — a real authored
+codebase that ships with Contract IDE. Your contracts go into a different
+target repo, but the prose density bar is set by these four files.
+
+You will receive in the user prompt:
+  - The Stage 1 + Stage 2 node descriptor (uuid / kind / level / file /
+    parent_hint / route / code_ranges).
+  - The full source file contents (or a slice when the file is large).
+  - For UI L4 atoms: the parent L3 page's contracts already derived in
+    this batch, so you can write atom prose that ties back to the page.
+
+----------------------------------------------------------------------
+SECTION B — PER-KIND RULES
+
+Branch on the node's kind + level:
+
+  • UI L3 (page.tsx, layout.tsx)
+      Produce: intent (50–200 words, user-facing capability) + role
+      (30–100 words, positional/functional). Optional notes (≤50 words)
+      for historical decisions or surface-level constraints.
+      DO NOT produce inputs / outputs / side_effects (the schema rejects
+      them on UI nodes).
+      Intent must name the user/persona ("a logged-in customer") and the
+      job-to-be-done ("manages their profile, billing, notifications").
+      Role must position the surface against siblings ("primary surface
+      for manage-my-account; billing and notifications are children").
+
+  • UI L4 (atoms inside page.tsx — danger-zone, form-row, action button)
+      Produce: intent + role + examples (string array; may be empty —
+      the renderer prints "(none yet — to be authored when this atom
+      gets its first action)" when the array is empty).
+      Use a non-empty examples array only when the atom is a clear
+      action surface AND the source code makes the action explicit
+      (form submission, button click handler). Each example is a single
+      string of "Given X / When Y / Then Z" prose.
+      Intent must name the parent L3 surface ("the danger-zone region
+      of the Account Settings page") to anchor the atom in its
+      container.
+
+  • Backend (kind ∈ {API, lib, data, external, job, cron, event})
+      Produce: intent + role + inputs (≥1 string) + outputs (≥1 string)
+      + side_effects (string array, MAY be empty for pure functions —
+      but the section header is always present per BACKEND-FM-01).
+      Each input / output / side_effect string is ≥5 chars (the schema
+      rejects empty bullets — Phase 14 revision Issue 6).
+      Inputs use inline-code spans for code-y identifiers
+      (`Authorization: Bearer <token>`, `userId: string`).
+      Outputs use HTTP status codes when kind is API; field-level shapes
+      when kind is lib / data / external (`Promise<void>` —
+      resolves when …).
+      Side effects NAME other lib/external functions called when those
+      names appear in the source's import block. Never invent names not
+      visible in the source.
+
+CROSS-REFERENCES (load-bearing for Plan 14-05 flow synthesis):
+When a backend node calls another known node visible in its import block,
+NAME the call: "Calls beginAccountDeletion(userId) which: …" — never
+"Performs the deletion logic." This is what lets the next stage build
+the flow contract that walks across nodes.
+
+DECISION SPECIFICITY (load-bearing for the believability gate):
+Intent must call out WHICH SPECIFIC behavior was chosen vs alternatives.
+  PASS: "Soft-deletes by setting deletedAt rather than removing the row,
+         preserving FK references in Invoice / AuditLog."
+  FAIL: "Deletes the user from the database."
+
+DO NOT use generic verbs ("processes", "handles", "manages") in Intent.
+Replace them with the specific verb the code actually executes
+("anonymizes", "soft-deletes", "archives the Stripe customer").
+
+DO NOT write less than ~50 words on Intent. Sparse Intent = generic
+contract = useless to a downstream agent.
+
+----------------------------------------------------------------------
+SECTION C — EMBEDDED EXEMPLARS (verbatim, load-bearing)
+
+The four files below are the literal target prose density. Match their
+sentence rhythm, specificity, and cross-reference style. They are
+extracted verbatim from contract-ide-demo/.contracts/ — a Contract IDE
+authored repo whose .contracts/ tree has been hand-tuned for the demo.
+
+--- EXEMPLAR 1 of 4: backend API endpoint (DELETE /api/account) ---
+File: src/app/api/account/route.ts
+Kind: API · Level: L3
+{{EXEMPLAR_API}}
+--- END EXEMPLAR 1 ---
+
+--- EXEMPLAR 2 of 4: backend lib function (beginAccountDeletion) ---
+File: src/lib/account/beginAccountDeletion.ts
+Kind: lib · Level: L3
+{{EXEMPLAR_LIB}}
+--- END EXEMPLAR 2 ---
+
+--- EXEMPLAR 3 of 4: UI L3 page surface (Account Settings) ---
+File: src/app/account/settings/page.tsx
+Kind: UI · Level: L3
+{{EXEMPLAR_UI_L3}}
+--- END EXEMPLAR 3 ---
+
+--- EXEMPLAR 4 of 4: UI L4 atom (Danger Zone container) ---
+File: src/app/account/settings/page.tsx
+Kind: UI · Level: L4
+{{EXEMPLAR_UI_L4}}
+--- END EXEMPLAR 4 ---
+
+Match this density. If your output reads vaguer than these exemplars —
+too short, too generic, lacking the specific behavior callouts ("Soft-
+deletes by setting deletedAt rather than removing the row" not "Deletes
+the user") — it will be rejected at the Plan 14-04 Task 3 quality gate
+and you will be re-run.
+
+----------------------------------------------------------------------
+OUTPUT FORMAT
+
+Return a single JSON object matching schemas/contract-body.json. Always
+include the echoed `kind` and `level` fields so the schema's conditional
+branches fire correctly. Do not include section headers in the strings;
+write only the prose body of each section.
