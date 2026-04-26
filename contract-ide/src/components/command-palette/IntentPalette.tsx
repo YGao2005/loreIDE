@@ -49,6 +49,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Command } from 'cmdk';
+import { useReactFlow } from '@xyflow/react';
 import { findSubstrateByIntent, type IntentSearchHit } from '@/ipc/substrate';
 import { useGraphStore } from '@/store/graph';
 import { useSidebarStore } from '@/store/sidebar';
@@ -94,28 +95,124 @@ export function isSubstrateKind(kind: string): boolean {
 }
 
 /**
- * Resolves the routing decision for a substrate hit given the current chip filter.
- *
- * Returns:
- *   - 'modal'     → call useCitationStore.openCitation(hit.uuid) (TRUST-01 path)
- *   - 'inspector' → call useGraphStore.selectNode(hit.parent_uuid) (existing path)
- *
- * Conditions for 'modal':
- *   1. The hit is a substrate kind (isSubstrateKind).
- *   2. The Substrate chip is active (chipFilter === 'substrate').
- *
- * All other combinations fall back to 'inspector'.
- *
- * Exported for unit-testing (IntentPalette.test.ts cases 2 + 3).
+ * Backend node kinds. Hits with these `node_kind` values land on the L2 chain
+ * and zoom to the ServiceCard for that node — they ARE nodes in the chain,
+ * not screens.
  */
-export function resolveSubstrateRoute(
-  hit: { kind: string },
-  chipFilter: ChipFilter,
-): 'modal' | 'inspector' {
-  if (isSubstrateKind(hit.kind) && chipFilter === 'substrate') {
-    return 'modal';
+const BACKEND_NODE_KINDS = new Set([
+  'API',
+  'lib',
+  'data',
+  'external',
+  'job',
+  'cron',
+  'event',
+]);
+
+/**
+ * Destination tags. Each tag maps to a deterministic action chain in
+ * `handleSelect`, plus a short user-facing hint rendered in the result row so
+ * users can preview where a click will take them.
+ *
+ *   - 'modal'        → SourceArchaeologyModal (substrate rule editing)
+ *   - 'flow-chain'   → L2 vertical chain mounted (clicked a flow itself)
+ *   - 'screen'       → L2 chain + ScreenCard centered (clicked a UI L3 page)
+ *   - 'screen-chip'  → L2 chain + parent ScreenCard centered + chip halo on
+ *                       the L4 atom (clicked a UI L4 component)
+ *   - 'service-node' → L2 chain + ServiceCard centered + selected (clicked an
+ *                       API/lib/data/external/job/cron/event node)
+ *   - 'breadcrumb'   → fallback for L0/L1/L2 non-flow contracts; pushParent
+ *                       only (canvas does NOT change — see GraphCanvasInner)
+ */
+export type Destination =
+  | 'modal'
+  | 'flow-chain'
+  | 'screen'
+  | 'screen-chip'
+  | 'service-node'
+  | 'breadcrumb';
+
+/**
+ * Single source of truth for "what does clicking this hit do?". Pure function
+ * — depends only on hit shape, not on store state — so it can drive both the
+ * row's destination hint AND `handleSelect`'s action dispatch from the same
+ * decision.
+ *
+ * Substrate rules ALWAYS open the modal regardless of chip filter (per Yang
+ * 2026-04-25 spec — "rule → opens up the popup modal that allows edits or
+ * changes or deletions"). This supersedes plan 15-02's chip-conditional
+ * routing: the chip is now a search-scope toggle, not a routing toggle.
+ *
+ * Exported for unit-testing.
+ */
+export function resolveDestination(hit: IntentSearchHit): Destination {
+  if (isSubstrateKind(hit.kind)) return 'modal';
+  if (hit.kind === 'flow') return 'flow-chain';
+  if (hit.kind === 'contract') {
+    if (hit.node_kind === 'UI' && hit.level === 'L4') return 'screen-chip';
+    if (hit.node_kind === 'UI') return 'screen';
+    if (hit.node_kind && BACKEND_NODE_KINDS.has(hit.node_kind)) {
+      return 'service-node';
+    }
   }
-  return 'inspector';
+  return 'breadcrumb';
+}
+
+/**
+ * Short human-facing hint for the right edge of each result row — answers
+ * "where will this take me?" before the user clicks. Kept under ~14 chars so
+ * it fits the row without truncation at typical palette widths.
+ */
+export function destinationHint(dest: Destination): string {
+  switch (dest) {
+    case 'modal':
+      return 'Open rule';
+    case 'flow-chain':
+      return 'Open flow';
+    case 'screen':
+      return 'Open screen';
+    case 'screen-chip':
+      return 'Focus chip';
+    case 'service-node':
+      return 'Zoom to node';
+    case 'breadcrumb':
+      return 'Open';
+  }
+}
+
+/**
+ * Semantic kind label rendered as the row's right-side badge. Replaces the
+ * raw L0..L4 level pill with something users can read ("Screen", "API",
+ * "Decision") instead of inferring kind from level + body.
+ */
+export function kindLabel(hit: IntentSearchHit): string {
+  if (isSubstrateKind(hit.kind)) {
+    switch (hit.kind) {
+      case 'constraint':
+        return 'Constraint';
+      case 'decision':
+        return 'Decision';
+      case 'open_question':
+        return 'Open Q';
+      case 'resolved_question':
+        return 'Resolved Q';
+      case 'attempt':
+        return 'Attempt';
+    }
+  }
+  if (hit.kind === 'flow') return 'Flow';
+  if (hit.kind === 'contract' && hit.node_kind) {
+    if (hit.node_kind === 'UI' && hit.level === 'L4') return 'Component';
+    if (hit.node_kind === 'UI') return 'Screen';
+    if (hit.node_kind === 'API') return 'API';
+    if (hit.node_kind === 'lib') return 'Lib';
+    if (hit.node_kind === 'data') return 'Data';
+    if (hit.node_kind === 'external') return 'External';
+    if (hit.node_kind === 'job') return 'Job';
+    if (hit.node_kind === 'cron') return 'Cron';
+    if (hit.node_kind === 'event') return 'Event';
+  }
+  return hit.level ?? '';
 }
 
 /**
@@ -139,6 +236,40 @@ function findOwningFlow(
 }
 
 /**
+ * Animate the viewport to center on a chain member after `setSelectedFlow`
+ * triggers FlowChainLayout to mount. The mount is async (Zustand → React
+ * effect → react-flow render → `getNode` returns a node), so we poll a few
+ * times before giving up. Each retry is one frame (~16ms); stop after 30
+ * frames (~500ms) — by then either the chain rendered or the uuid isn't in
+ * this flow's members and centering would never succeed anyway.
+ *
+ * Retries are cheap (an early `getNode` returns null immediately); the only
+ * cost is the requestAnimationFrame closure. No-op if the node never appears.
+ */
+function centerOnNode(
+  uuid: string,
+  getNode: (id: string) => { position: { x: number; y: number }; measured?: { width?: number; height?: number } } | undefined,
+  setCenter: (x: number, y: number, opts?: { zoom?: number; duration?: number }) => void,
+  zoom: number,
+): void {
+  let attempts = 0;
+  const tryCenter = () => {
+    const target = getNode(uuid);
+    if (target) {
+      const cx = target.position.x + (target.measured?.width ?? 320) / 2;
+      const cy = target.position.y + (target.measured?.height ?? 200) / 2;
+      setCenter(cx, cy, { zoom, duration: 500 });
+      return;
+    }
+    attempts += 1;
+    if (attempts < 30) {
+      requestAnimationFrame(tryCenter);
+    }
+  };
+  requestAnimationFrame(tryCenter);
+}
+
+/**
  * Debounce window (ms) between the last keystroke and IPC dispatch. Picked
  * to match the typical 80–120wpm typing speed: a fast typer hitting 6 chars
  * in 600ms triggers ONE query, not six. 300ms is also the cap that keeps
@@ -159,6 +290,11 @@ export function IntentPalette() {
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState<IntentSearchHit[]>([]);
   const [loading, setLoading] = useState(false);
+  // useReactFlow is safe here because <ReactFlowProvider> is hoisted to
+  // AppShell so both the canvas and the palette resolve the same instance.
+  // setCenter / getNode let us animate the viewport to the clicked hit's
+  // ServiceCard or ScreenCard inside FlowChainLayout.
+  const { setCenter, getNode } = useReactFlow();
   /**
    * Phase 15 Plan 02 — chip filter state. Resets to 'all' on close so each
    * dialog open starts fresh (per must_haves: "chip state resets between dialog
@@ -186,8 +322,17 @@ export function IntentPalette() {
         setOpen(false);
       }
     };
+    // Sidebar search affordance dispatches `intent-palette:open` on click so
+    // mouse users get the same surface as Cmd+P. Always sets to true (open),
+    // not toggle — clicking the search input shouldn't close an already-open
+    // palette.
+    const onOpenEvent = () => setOpen(true);
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    window.addEventListener('intent-palette:open', onOpenEvent);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('intent-palette:open', onOpenEvent);
+    };
   }, [open]);
 
   /**
@@ -273,81 +418,76 @@ export function IntentPalette() {
     (hit: IntentSearchHit) => {
       close();
 
-      if (hit.kind === 'flow') {
-        // Flow → land at L2 vertical-chain view. Both stores updated so:
-        //   - Sidebar's flow-row selection state matches the canvas focus.
-        //   - Canvas drill-in renders the L2 chain via parent stack.
+      const dest = resolveDestination(hit);
+      const allNodes = useGraphStore.getState().nodes;
+
+      // Substrate rules ALWAYS open the modal (Yang spec 2026-04-25 — replaces
+      // plan 15-02's chip-conditional substrate routing). The chip remains a
+      // search-scope toggle; click destination is determined by hit kind.
+      if (dest === 'modal') {
+        useCitationStore.getState().openCitation(hit.uuid);
+        return;
+      }
+
+      // Flow contract → mount L2 chain for this flow.
+      if (dest === 'flow-chain') {
         useSidebarStore.getState().setSelectedFlow(hit.uuid);
         useGraphStore.getState().pushParent(hit.uuid);
         return;
       }
 
-      if (hit.kind === 'contract' && hit.level === 'L4') {
-        // L4 atom → resolve the owning flow (parent_uuid is the L3, find the
-        // flow whose `members` includes that L3) so the canvas swaps to the
-        // L2 vertical chain with the atom chip focused. Without setSelectedFlow
-        // the canvas would fall through to the empty-state "Select a flow"
-        // message — the new design has no abstract-graph fallback.
-        const allNodes = useGraphStore.getState().nodes;
+      // UI L4 component → land on parent screen, halo the chip. The L4 atom
+      // isn't itself a chain member; the L3 parent screen is. ScreenCard's
+      // chip overlay reads focusedAtomUuid to render the halo.
+      if (dest === 'screen-chip') {
         const owningFlow = findOwningFlow(hit.parent_uuid, allNodes);
         if (owningFlow) {
           useSidebarStore.getState().setSelectedFlow(owningFlow.uuid);
         }
         if (hit.parent_uuid) {
+          useGraphStore.getState().selectNode(hit.parent_uuid);
           useGraphStore.getState().pushParent(hit.parent_uuid);
+          centerOnNode(hit.parent_uuid, getNode, setCenter, 1.0);
         }
         useGraphStore.getState().setFocusedAtomUuid(hit.uuid);
         return;
       }
 
-      if (hit.kind === 'contract') {
-        // L0–L3 non-flow contract. For L3 triggers, resolve the owning flow
-        // so the canvas lands on its chain (L3 IS the trigger card at the top
-        // of the chain). L0/L1/L2 don't have an owning flow at this layer
-        // (L2 contracts ARE flows when kind:'flow'; L0/L1 are sidebar-only)
-        // so they only update the parent stack for Breadcrumb display.
-        if (hit.level === 'L3') {
-          const allNodes = useGraphStore.getState().nodes;
-          const owningFlow = findOwningFlow(hit.uuid, allNodes);
-          if (owningFlow) {
-            useSidebarStore.getState().setSelectedFlow(owningFlow.uuid);
-          }
+      // UI L3 screen → land on the screen itself (the ScreenCard at the top
+      // of the chain is the iframe). selectNode populates the Inspector;
+      // setCenter animates the viewport.
+      if (dest === 'screen') {
+        const owningFlow = findOwningFlow(hit.uuid, allNodes);
+        if (owningFlow) {
+          useSidebarStore.getState().setSelectedFlow(owningFlow.uuid);
         }
+        useGraphStore.getState().selectNode(hit.uuid);
         useGraphStore.getState().pushParent(hit.uuid);
+        centerOnNode(hit.uuid, getNode, setCenter, 1.0);
         return;
       }
 
-      // Substrate hit routing:
-      //
-      // Phase 15 Plan 02 (TRUST-01) OVERRIDE: when the Substrate chip is
-      // active, open the SourceArchaeologyModal directly so the user sees
-      // the verbatim quote immediately (<2s demo path). This is NOT the
-      // default behaviour — it only fires under the Substrate filter.
-      //
-      // Under the All chip (or any non-Substrate chip), preserve the
-      // existing parent-atom navigation so plan 13-03's per-kind contract
-      // stays intact (no regression to plan 13-03's navigation contract).
-      //
-      // Uses resolveSubstrateRoute (exported pure helper, tested in
-      // IntentPalette.test.ts cases 2 + 3).
-      const routeDecision = resolveSubstrateRoute(hit, chipFilter);
-
-      if (routeDecision === 'modal') {
-        // Phase 15 Plan 02 TRUST-01 override — open modal directly.
-        // openCitation sets openCitationUuid which SourceArchaeologyModal
-        // subscribes to (Phase 13 Plan 07).
-        useCitationStore.getState().openCitation(hit.uuid);
+      // Backend node (API / lib / data / external / job / cron / event) →
+      // ServiceCard inside the chain. Zoom in tighter (1.4) since service
+      // cards carry signature + schema + side-effects detail worth reading.
+      if (dest === 'service-node') {
+        const owningFlow = findOwningFlow(hit.uuid, allNodes);
+        if (owningFlow) {
+          useSidebarStore.getState().setSelectedFlow(owningFlow.uuid);
+        }
+        useGraphStore.getState().selectNode(hit.uuid);
+        useGraphStore.getState().pushParent(hit.uuid);
+        centerOnNode(hit.uuid, getNode, setCenter, 1.4);
         return;
       }
 
-      // Default substrate routing (All chip or other chips): open the atom
-      // the substrate node speaks to via the canonical setter (selectNode,
-      // NOT setSelectedNode per plan 13-01 SUMMARY checker N7).
-      if (hit.parent_uuid) {
-        useGraphStore.getState().selectNode(hit.parent_uuid);
-      }
+      // Fallback (L0/L1/L2 non-flow contract or unknown node_kind) — push
+      // onto the breadcrumb stack so it shows up in the trail. The canvas
+      // doesn't change; the inspector reflects the contract.
+      useGraphStore.getState().selectNode(hit.uuid);
+      useGraphStore.getState().pushParent(hit.uuid);
     },
-    [close, chipFilter],
+    [close, getNode, setCenter],
   );
 
   return (

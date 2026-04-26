@@ -103,6 +103,13 @@ export async function getSubstrateNodeDetail(
 export interface IntentSearchHit {
   uuid: string;
   kind: string;
+  /**
+   * Underlying `nodes.kind` for contract hits — `'UI' | 'API' | 'lib' | 'data' |
+   * 'external' | 'job' | 'cron' | 'event' | 'flow'`. Null for substrate hits
+   * (their `kind` field already encodes the substrate node type). Drives the
+   * UI-screen vs backend-node routing branch in IntentPalette.
+   */
+  node_kind: string | null;
   level: string | null;
   name: string;
   summary: string;

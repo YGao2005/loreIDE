@@ -1,108 +1,172 @@
 /**
- * Phase 15 Plan 02 — IntentPalette chip wiring + routing override tests (TRUST-01).
+ * IntentPalette routing + chip wiring tests.
  *
- * Tests the three load-bearing TRUST-01 behaviours:
- *   1. Substrate chip wires kind_filter='substrate' to findSubstrateByIntent.
- *   2. Substrate-hit click under Substrate chip routes to openCitation (modal),
- *      not selectNode (canvas inspector).
- *   3. Substrate-hit click under All chip preserves existing selectNode routing.
- *   4. Chip state semantics: 'all' produces undefined kindFilter (no filtering).
+ * Covers two pure helpers exported from IntentPalette.tsx:
  *
- * **Test infrastructure note:** this project uses `environment: 'node'` (no
- * jsdom) and does NOT include @testing-library/react per the established
- * convention from ServiceCard.test.ts and ScreenCard.test.ts — those tests
- * verify render decisions through pure logic helpers rather than DOM mounting.
- * We follow the same pattern here: extract the routing and chip wiring logic
- * into pure testable units, leaving the React render wiring to manual smoke.
+ *   - `resolveKindFilter(chipFilter)` — chip → IPC kindFilter mapping. The
+ *     chip is a *search-scope* toggle (which corpus to query). Tested 4-way.
  *
- * What we test:
- *   - `resolveKindFilter(chipFilter)` → the mapping from ChipFilter to the
- *     optional kindFilter argument (directly mirrors what IntentPalette passes).
- *   - `resolveSubstrateRoute(hit, chipFilter)` → the routing decision for
- *     substrate hits (modal vs. inspector) per the chipFilter value.
- *   - `isSubstrateKind(kind)` → the kind-guard used by both IntentPalette and
- *     IntentPaletteHit to identify substrate-node rows.
+ *   - `resolveDestination(hit)` — the load-bearing pure routing decision per
+ *     hit kind. Drives both the destination hint shown in the row AND the
+ *     action chain in `handleSelect`. Substrate hits ALWAYS open the modal
+ *     (Yang spec 2026-04-25 — supersedes plan 15-02's chip-conditional
+ *     substrate routing).
  *
- * These pure helpers are exported from IntentPalette.tsx for testability.
- * The routing branch in handleSelect calls them directly, so their correctness
- * is equivalent to testing handleSelect itself.
+ *   - `kindLabel(hit)` and `destinationHint(dest)` — UI string helpers; light
+ *     coverage to catch missing cases.
+ *
+ * **Test infrastructure note:** project uses `environment: 'node'` (no jsdom);
+ * we test pure helpers and leave React render wiring to manual smoke per the
+ * established convention from ServiceCard.test.ts and ScreenCard.test.ts.
  */
 
 import { describe, it, expect } from 'vitest';
 import {
   resolveKindFilter,
-  resolveSubstrateRoute,
+  resolveDestination,
+  destinationHint,
+  kindLabel,
   isSubstrateKind,
 } from '../IntentPalette';
+import type { IntentSearchHit } from '@/ipc/substrate';
+
+// Helper to construct a hit with sane defaults — only override the fields the
+// test cares about.
+function mkHit(overrides: Partial<IntentSearchHit>): IntentSearchHit {
+  return {
+    uuid: 'uuid-x',
+    kind: 'contract',
+    node_kind: null,
+    level: null,
+    name: 'A hit',
+    summary: '',
+    state: null,
+    parent_uuid: null,
+    score: 0.5,
+    ...overrides,
+  };
+}
 
 // ---------------------------------------------------------------------------
-// Case 1: Substrate chip activates kind_filter on IPC call
+// resolveKindFilter — chip → IPC kindFilter mapping
 // ---------------------------------------------------------------------------
 
 describe('resolveKindFilter — chip → IPC kindFilter mapping', () => {
-  it('All chip produces undefined (existing behaviour, no filter sent to Rust)', () => {
+  it('All chip produces undefined (no filter sent to Rust)', () => {
     expect(resolveKindFilter('all')).toBeUndefined();
   });
-
   it('Substrate chip produces "substrate"', () => {
     expect(resolveKindFilter('substrate')).toBe('substrate');
   });
-
   it('Contracts chip produces "contracts"', () => {
     expect(resolveKindFilter('contracts')).toBe('contracts');
   });
-
   it('Code chip produces "code"', () => {
     expect(resolveKindFilter('code')).toBe('code');
   });
 });
 
 // ---------------------------------------------------------------------------
-// Case 2 + 3: Substrate-hit routing decision
+// resolveDestination — per-hit routing decision (the load-bearing helper)
 // ---------------------------------------------------------------------------
 
-describe('resolveSubstrateRoute — routing decision for substrate hits', () => {
-  const substrateHit = {
-    uuid: 'dec-confirm-via-email-link-2026-02-18',
-    kind: 'decision',
-    parent_uuid: 'parent-contract-uuid',
-    level: null,
-    name: 'Email confirmation via link',
-    summary: 'Confirm via email link, not OTP',
-    state: 'fresh',
-    score: 0.5,
-  };
+describe('resolveDestination — substrate rules ALWAYS open the modal', () => {
+  for (const kind of ['constraint', 'decision', 'open_question', 'resolved_question', 'attempt']) {
+    it(`${kind} → "modal" (independent of chip filter)`, () => {
+      expect(resolveDestination(mkHit({ kind }))).toBe('modal');
+    });
+  }
+});
 
-  it('Substrate chip → "modal" (openCitation path)', () => {
-    expect(resolveSubstrateRoute(substrateHit, 'substrate')).toBe('modal');
+describe('resolveDestination — flow contract → "flow-chain"', () => {
+  it('flow kind opens the L2 chain', () => {
+    expect(resolveDestination(mkHit({ kind: 'flow', level: 'L2' }))).toBe('flow-chain');
   });
+});
 
-  it('All chip → "inspector" (selectNode path — existing behaviour preserved)', () => {
-    expect(resolveSubstrateRoute(substrateHit, 'all')).toBe('inspector');
+describe('resolveDestination — UI screens vs UI components', () => {
+  it('UI L3 (screen page) → "screen"', () => {
+    expect(
+      resolveDestination(mkHit({ kind: 'contract', node_kind: 'UI', level: 'L3' })),
+    ).toBe('screen');
   });
-
-  it('Contracts chip → "inspector" (contracts chip shows substrate hits in All mode)', () => {
-    expect(resolveSubstrateRoute(substrateHit, 'contracts')).toBe('inspector');
+  it('UI L4 (component) → "screen-chip" (parent screen + chip halo)', () => {
+    expect(
+      resolveDestination(
+        mkHit({ kind: 'contract', node_kind: 'UI', level: 'L4', parent_uuid: 'parent-l3' }),
+      ),
+    ).toBe('screen-chip');
   });
+});
 
-  it('Code chip → "inspector" (code chip behaves like All for substrate routing)', () => {
-    expect(resolveSubstrateRoute(substrateHit, 'code')).toBe('inspector');
+describe('resolveDestination — backend nodes → "service-node" (zoom in)', () => {
+  for (const node_kind of ['API', 'lib', 'data', 'external', 'job', 'cron', 'event']) {
+    it(`${node_kind} → "service-node"`, () => {
+      expect(
+        resolveDestination(mkHit({ kind: 'contract', node_kind, level: 'L3' })),
+      ).toBe('service-node');
+    });
+  }
+});
+
+describe('resolveDestination — fallback to "breadcrumb" for ambiguous contracts', () => {
+  it('contract with unknown node_kind → "breadcrumb"', () => {
+    expect(
+      resolveDestination(mkHit({ kind: 'contract', node_kind: 'unknown', level: 'L2' })),
+    ).toBe('breadcrumb');
   });
-
-  it('non-substrate kind (contract) → "inspector" regardless of chip', () => {
-    const contractHit = { ...substrateHit, kind: 'contract' };
-    expect(resolveSubstrateRoute(contractHit, 'substrate')).toBe('inspector');
-    expect(resolveSubstrateRoute(contractHit, 'all')).toBe('inspector');
-  });
-
-  it('non-substrate kind (flow) → "inspector" regardless of chip', () => {
-    const flowHit = { ...substrateHit, kind: 'flow', level: 'L2' };
-    expect(resolveSubstrateRoute(flowHit, 'substrate')).toBe('inspector');
+  it('contract with null node_kind → "breadcrumb"', () => {
+    expect(
+      resolveDestination(mkHit({ kind: 'contract', node_kind: null, level: 'L1' })),
+    ).toBe('breadcrumb');
   });
 });
 
 // ---------------------------------------------------------------------------
-// Case 4: isSubstrateKind — kind guard
+// destinationHint — short user-facing label per destination
+// ---------------------------------------------------------------------------
+
+describe('destinationHint — every destination has a short label', () => {
+  it('every destination tag returns a non-empty string', () => {
+    const dests = ['modal', 'flow-chain', 'screen', 'screen-chip', 'service-node', 'breadcrumb'] as const;
+    for (const d of dests) {
+      const hint = destinationHint(d);
+      expect(hint).toBeTruthy();
+      expect(hint.length).toBeLessThan(20);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// kindLabel — semantic kind badge text
+// ---------------------------------------------------------------------------
+
+describe('kindLabel — semantic kind text per hit', () => {
+  it('UI L3 → "Screen"', () => {
+    expect(kindLabel(mkHit({ kind: 'contract', node_kind: 'UI', level: 'L3' }))).toBe('Screen');
+  });
+  it('UI L4 → "Component"', () => {
+    expect(kindLabel(mkHit({ kind: 'contract', node_kind: 'UI', level: 'L4' }))).toBe('Component');
+  });
+  it('API → "API"', () => {
+    expect(kindLabel(mkHit({ kind: 'contract', node_kind: 'API' }))).toBe('API');
+  });
+  it('lib → "Lib"', () => {
+    expect(kindLabel(mkHit({ kind: 'contract', node_kind: 'lib' }))).toBe('Lib');
+  });
+  it('flow → "Flow"', () => {
+    expect(kindLabel(mkHit({ kind: 'flow', level: 'L2' }))).toBe('Flow');
+  });
+  it('decision → "Decision"', () => {
+    expect(kindLabel(mkHit({ kind: 'decision' }))).toBe('Decision');
+  });
+  it('constraint → "Constraint"', () => {
+    expect(kindLabel(mkHit({ kind: 'constraint' }))).toBe('Constraint');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// isSubstrateKind — kind guard (preserved from previous test surface)
 // ---------------------------------------------------------------------------
 
 describe('isSubstrateKind — identifies substrate-node kinds', () => {
@@ -113,36 +177,10 @@ describe('isSubstrateKind — identifies substrate-node kinds', () => {
     expect(isSubstrateKind('resolved_question')).toBe(true);
     expect(isSubstrateKind('attempt')).toBe(true);
   });
-
-  it('returns false for contract kinds', () => {
+  it('returns false for contract / flow / unknown kinds', () => {
     expect(isSubstrateKind('contract')).toBe(false);
     expect(isSubstrateKind('flow')).toBe(false);
-  });
-
-  it('returns false for unknown/empty strings', () => {
     expect(isSubstrateKind('')).toBe(false);
     expect(isSubstrateKind('unknown_kind')).toBe(false);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Case: chip state reset — verified via resolveKindFilter('all') → undefined
-// (the reset-to-all on close is a React setState call; it's structurally
-// correct because close() calls setChipFilter('all'), and resolveKindFilter
-// confirms 'all' produces no filter. The useState behaviour is standard React.)
-// ---------------------------------------------------------------------------
-
-describe('chip state reset (structural check)', () => {
-  it('chip reset to all produces the same undefined kindFilter as the initial mount state', () => {
-    // On mount, chipFilter = 'all' (useState default).
-    // On close, setChipFilter('all') is called.
-    // Both states produce resolveKindFilter('all') === undefined.
-    // Therefore: re-opening the dialog after close behaves identically to
-    // the first open — no stale chip filter from the previous session.
-    const initial = resolveKindFilter('all');
-    const afterReset = resolveKindFilter('all');
-    expect(initial).toBeUndefined();
-    expect(afterReset).toBeUndefined();
-    expect(initial).toEqual(afterReset);
   });
 });

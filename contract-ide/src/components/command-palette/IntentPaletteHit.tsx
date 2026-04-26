@@ -1,25 +1,26 @@
 /**
  * Phase 13 Plan 03 — single hit row for the Cmd+P IntentPalette (SUB-08).
+ * 2026-04-25 redesign — destination clarity pass per Yang feedback.
  *
- * Renders one `IntentSearchHit` with three optional decorations:
- *   - Kind icon: small lucide glyph chosen per `hit.kind` so the user's
- *     visual mental model groups results consistently (FileText for
- *     contracts, GitBranch for flows, distinct icons for the four substrate
- *     kinds).
- *   - Substrate-state badge: a tiny colored dot for substrate hits so an
- *     intent-drifted decision (orange-600) reads visually-distinct from a
- *     fresh constraint (gray) without having to consult the level/kind
- *     header. Hex values mirror plan 13-01 CVA variants exactly so the row
- *     reads as a "preview" of canvas color state.
- *   - Level pill: L0..L4 right-aligned for contract hits; absent for
- *     substrate hits (which have null `level`).
+ * Each row now answers three questions at a glance:
+ *   1. What is this?      → KindIcon + kind badge ("Screen", "API", "Decision")
+ *   2. Where does it live? → parent-name breadcrumb under the title
+ *   3. What does clicking do? → destination hint at the right edge
+ *      ("→ Open screen", "→ Zoom to node", "→ Open rule")
  *
- * Why we keep the icon + badge inline (no shadcn dependency import):
- *   - Sizing must hit the 16px-min sidebar grid established by plan 13-02's
- *     SidebarAreaItem Badge. shadcn's Badge default sizing is too generous
- *     for a palette row.
- *   - Icon + dot mappings are tiny and self-contained — externalising them
- *     would add file weight without reuse value.
+ * The destination hint is the load-bearing piece: users were unable to predict
+ * which click would open the iframe, which would zoom into a backend node, and
+ * which would pop the rule editor. The hint surfaces that decision before the
+ * click instead of after.
+ *
+ * Layout:
+ *   [icon] [name]                                [Kind badge]
+ *          [parent breadcrumb · summary]         [→ destination]
+ *
+ * The right column stacks the kind badge over the destination hint so both
+ * stay visible on narrow palette widths. State badge (intent_drifted /
+ * superseded) replaces the destination hint on substrate hits where the state
+ * is the urgent signal.
  */
 
 import {
@@ -30,21 +31,36 @@ import {
   HelpCircle,
   CheckCircle2,
   Lightbulb,
+  Monitor,
+  Zap,
+  Database,
+  Cloud,
+  Boxes,
+  Component,
+  Calendar,
+  Bell,
+  ArrowRight,
 } from 'lucide-react';
 import type { IntentSearchHit } from '@/ipc/substrate';
+import { useGraphStore } from '@/store/graph';
+import {
+  destinationHint,
+  isSubstrateKind,
+  kindLabel,
+  resolveDestination,
+} from './IntentPalette';
 
 /**
- * Map kind → lucide icon. Contract / flow get document-style icons; the four
- * substrate kinds each get a kind-specific glyph so the palette row tells the
- * user *what* they're looking at without parsing the name string.
+ * Map kind → lucide icon. Differentiated per node_kind for contracts so the
+ * row visually clusters by what-it-is at a glance — Screen vs API vs Lib are
+ * meaningfully different things and should look different.
  */
-function KindIcon({ kind }: { kind: string }) {
+function KindIcon({ hit }: { hit: IntentSearchHit }) {
   const className = 'h-4 w-4 text-muted-foreground shrink-0';
-  switch (kind) {
+  // Substrate kinds first — they have distinct glyphs already.
+  switch (hit.kind) {
     case 'flow':
       return <GitBranch className={className} aria-label="flow" />;
-    case 'contract':
-      return <FileText className={className} aria-label="contract" />;
     case 'constraint':
       return <CircleAlert className={className} aria-label="constraint" />;
     case 'decision':
@@ -55,9 +71,35 @@ function KindIcon({ kind }: { kind: string }) {
       return <CheckCircle2 className={className} aria-label="resolved question" />;
     case 'attempt':
       return <Lightbulb className={className} aria-label="attempt" />;
-    default:
-      return <FileText className={className} aria-label="result" />;
   }
+  // Contract hits — branch on node_kind for kind-specific icons.
+  if (hit.kind === 'contract') {
+    if (hit.node_kind === 'UI' && hit.level === 'L4') {
+      return <Component className={className} aria-label="component" />;
+    }
+    if (hit.node_kind === 'UI') {
+      return <Monitor className={className} aria-label="screen" />;
+    }
+    if (hit.node_kind === 'API') {
+      return <Zap className={className} aria-label="api endpoint" />;
+    }
+    if (hit.node_kind === 'lib') {
+      return <Boxes className={className} aria-label="lib" />;
+    }
+    if (hit.node_kind === 'data') {
+      return <Database className={className} aria-label="data" />;
+    }
+    if (hit.node_kind === 'external') {
+      return <Cloud className={className} aria-label="external" />;
+    }
+    if (hit.node_kind === 'cron') {
+      return <Calendar className={className} aria-label="cron" />;
+    }
+    if (hit.node_kind === 'event') {
+      return <Bell className={className} aria-label="event" />;
+    }
+  }
+  return <FileText className={className} aria-label="result" />;
 }
 
 /**
@@ -69,17 +111,10 @@ function badgeStyleFor(state: string | null): { bg: string; ring: string; label:
   if (!state || state === 'fresh') return null;
   switch (state) {
     case 'intent_drifted':
-      // orange-600 — matches plan 13-01 intent_drifted CVA exactly. The
-      // lightest possible visual cue at the palette scale (no glow / pulse —
-      // those are reserved for canvas where the visual real-estate supports
-      // them).
       return { bg: 'rgba(234, 88, 12, 0.20)', ring: 'rgba(234, 88, 12, 0.55)', label: 'drifted' };
     case 'superseded':
-      // orange-400 — softer than intent_drifted. Matches plan 13-01 too.
       return { bg: 'rgba(251, 146, 60, 0.18)', ring: 'rgba(251, 146, 60, 0.50)', label: 'superseded' };
     case 'stale':
-      // amber-500 — Phase 13-09 sync may emit this; render preview-style
-      // matching plan 13-02 SidebarAreaItem rollup-stale badge.
       return { bg: 'rgba(245, 158, 11, 0.18)', ring: 'rgba(245, 158, 11, 0.50)', label: 'stale' };
     default:
       return null;
@@ -87,67 +122,82 @@ function badgeStyleFor(state: string | null): { bg: string; ring: string; label:
 }
 
 /**
- * Substrate kind values — used to render a "substrate" kind chip so users can
- * visually distinguish substrate hits from contract hits in the All view.
- * (Contract hits show their level; substrate hits have no level — this fills
- * the gap so the row doesn't look naked on the right side.)
+ * Lookup parent name from the loaded contract set. Returns the parent's
+ * `name` if present in `useGraphStore.nodes`, else null. Used to render the
+ * "in <Parent>" hint under the row title for L4 components and substrate
+ * hits where parent context is more useful than the body summary.
  */
-const SUBSTRATE_KINDS = new Set([
-  'constraint',
-  'decision',
-  'open_question',
-  'resolved_question',
-  'attempt',
-]);
+function useParentName(parentUuid: string | null): string | null {
+  return useGraphStore((s) => {
+    if (!parentUuid) return null;
+    const parent = s.nodes.find((n) => n.uuid === parentUuid);
+    return parent?.name ?? null;
+  });
+}
 
 /**
  * Single palette row. The OUTER `<Command.Item>` lives in `IntentPalette.tsx`
  * — this component only renders the row contents.
- *
- * Phase 15 Plan 02: substrate hits in the All view get a "substrate" kind chip
- * (right-aligned, muted) so they're visually distinguishable from contract
- * hits. Skip if the existing level label is already present.
  */
 export function IntentPaletteHit({ hit }: { hit: IntentSearchHit }) {
-  const badge = badgeStyleFor(hit.state);
-  const isSubstrate = SUBSTRATE_KINDS.has(hit.kind);
+  const stateBadge = badgeStyleFor(hit.state);
+  const dest = resolveDestination(hit);
+  const parentName = useParentName(hit.parent_uuid);
+  const isSub = isSubstrateKind(hit.kind);
+
+  // Secondary line strategy:
+  //   - L4 component / substrate hit: parent name (more useful than body —
+  //     "DangerZone in Account Settings" beats showing the first 60 chars
+  //     of contract body).
+  //   - Anything else: body summary (the body IS the useful preview).
+  const secondaryLine =
+    (hit.kind === 'contract' && hit.node_kind === 'UI' && hit.level === 'L4' && parentName)
+      ? `in ${parentName}`
+      : isSub && parentName
+      ? `on ${parentName}`
+      : hit.summary;
+
   return (
-    <div className="flex items-center gap-2 py-0.5 min-w-0">
-      <KindIcon kind={hit.kind} />
+    <div className="flex items-start gap-2.5 py-1 min-w-0">
+      <div className="pt-0.5">
+        <KindIcon hit={hit} />
+      </div>
       <div className="flex flex-col flex-1 min-w-0">
-        <span className="text-sm font-medium truncate">{hit.name}</span>
-        {hit.summary && (
-          <span className="text-xs text-muted-foreground truncate">{hit.summary}</span>
+        <span className="text-sm font-medium truncate leading-tight">
+          {hit.name}
+        </span>
+        {secondaryLine && (
+          <span className="text-xs text-muted-foreground truncate leading-snug mt-0.5">
+            {secondaryLine}
+          </span>
         )}
       </div>
-      {badge && (
-        <span
-          className="rounded-full px-1.5 py-0.5 text-[10px] uppercase tracking-wide ring-1 shrink-0"
-          style={{
-            backgroundColor: badge.bg,
-            // ring-1 with custom color via box-shadow inset — Tailwind's
-            // ring-* utilities don't accept arbitrary hex without a custom
-            // value, and the substrate hex values are too specific to bake
-            // into Tailwind config for one component.
-            boxShadow: `inset 0 0 0 1px ${badge.ring}`,
-            color: badge.ring,
-          }}
-        >
-          {badge.label}
+      <div className="flex flex-col items-end gap-0.5 shrink-0 pt-0.5">
+        {/* Top: kind badge — what is this? */}
+        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/80 leading-none">
+          {kindLabel(hit)}
         </span>
-      )}
-      {/* Level pill for contract hits; "substrate" kind chip for substrate hits.
-          Both are right-aligned and muted — they identify the result type
-          without competing with the hit name for visual prominence. */}
-      {hit.level ? (
-        <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70 shrink-0">
-          {hit.level}
-        </span>
-      ) : isSubstrate ? (
-        <span className="text-[10px] text-muted-foreground/50 shrink-0">
-          substrate
-        </span>
-      ) : null}
+        {/* Bottom: state badge wins over destination hint when present
+            (intent_drifted / superseded is more urgent than navigation
+            preview). Otherwise show the destination hint. */}
+        {stateBadge ? (
+          <span
+            className="rounded-full px-1.5 py-0.5 text-[10px] uppercase tracking-wide ring-1 leading-none mt-0.5"
+            style={{
+              backgroundColor: stateBadge.bg,
+              boxShadow: `inset 0 0 0 1px ${stateBadge.ring}`,
+              color: stateBadge.ring,
+            }}
+          >
+            {stateBadge.label}
+          </span>
+        ) : (
+          <span className="flex items-center gap-1 text-[10px] text-muted-foreground/60 leading-none mt-0.5">
+            <ArrowRight className="h-2.5 w-2.5" aria-hidden />
+            {destinationHint(dest)}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

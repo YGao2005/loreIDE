@@ -352,6 +352,12 @@ pub struct IntentSearchHit {
     /// `constraint` | `decision` | `open_question` | `resolved_question` |
     /// `attempt`. Drives navigation branch in the frontend.
     pub kind: String,
+    /// Underlying `nodes.kind` value for contract hits (UI | API | lib | data |
+    /// external | job | cron | event | flow). Null for substrate hits — their
+    /// `kind` field already encodes the substrate node type. Used by the
+    /// frontend to differentiate "frontend screen" vs "backend node" routing
+    /// without re-fetching the contract row.
+    pub node_kind: Option<String>,
     /// L0..L4 for contracts; null for substrate nodes.
     pub level: Option<String>,
     /// Display name for the row's primary line.
@@ -567,6 +573,7 @@ pub async fn find_substrate_by_intent(
             hits.push(IntentSearchHit {
                 uuid,
                 kind: surface_kind,
+                node_kind: Some(kind),
                 level: Some(level),
                 name,
                 summary,
@@ -698,6 +705,7 @@ pub async fn find_substrate_by_intent(
             hits.push(IntentSearchHit {
                 uuid,
                 kind: node_type,
+                node_kind: None,
                 level: None,
                 name,
                 summary,
