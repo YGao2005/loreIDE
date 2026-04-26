@@ -135,3 +135,59 @@ export interface SubstrateImpact {
 export async function getSubstrateImpact(uuid: string): Promise<SubstrateImpact> {
   return invoke<SubstrateImpact>('get_substrate_impact', { uuid });
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 15 Plan 05 — TRUST-03 SC5 + TRUST-04: Restore path + tombstoned list
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Wire-shape for a chain-head tombstoned rule returned by listTombstonedRules.
+ * Mirrors TombstonedRule in substrate_trust.rs.
+ */
+export interface TombstonedRule {
+  uuid: string;
+  /** First non-empty line of the rule text — computed by Rust. */
+  name: string;
+  /** node_type value (constraint / decision / principle / …). */
+  kind: string;
+  /** Full rule text. */
+  text: string;
+  /** Compound reason string '<kind>: <text>' or free-form. */
+  invalidated_reason: string | null;
+  /** ISO 8601 timestamp of tombstone (= invalid_at column). */
+  invalidated_at: string | null;
+  /** Actor who tombstoned the rule (e.g. 'human:yangg40@g.ucla.edu'). */
+  invalidated_by: string | null;
+}
+
+/**
+ * List chain-head tombstones only (RESEARCH Pitfall 5 semantic).
+ * Returns rules where invalid_at IS NOT NULL AND no active row references them via
+ * prev_version_uuid. Mid-chain tombstones (superseded by an active refinement) are hidden.
+ */
+export async function listTombstonedRules(): Promise<TombstonedRule[]> {
+  return invoke<TombstonedRule[]>('list_tombstoned_rules');
+}
+
+/**
+ * Atomically restore a tombstoned substrate rule.
+ * Calls restore_substrate_rule Rust IPC which:
+ *   1. Validates the row is tombstoned (invalid_at IS NOT NULL).
+ *   2. Validates no active successor exists (active-successor guard).
+ *   3. UPDATEs substrate_nodes: invalid_at=NULL, invalidated_reason=NULL, invalidated_by=NULL.
+ *   4. INSERTs substrate_edits row kind='restore' (before_text=NULL, after_text=text).
+ *   5. FTS trigger re-indexes the rule — Cmd+P substrate filter returns it again.
+ *
+ * Actor hardcoded to project email for v1. TODO(v2): read from settings/auth.
+ *
+ * Throws "rule is already active — nothing to restore" if already active.
+ * Throws "cannot restore: chain has an active successor — restore would create two heads"
+ * if the rule has an active successor.
+ */
+export async function restoreSubstrateRule(uuid: string): Promise<void> {
+  return invoke<void>('restore_substrate_rule', {
+    uuid,
+    // actor hardcoded per plan spec (TRUST-04 v1 constraint)
+    actor: 'human:yangg40@g.ucla.edu',
+  });
+}
