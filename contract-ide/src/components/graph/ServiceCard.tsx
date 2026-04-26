@@ -58,11 +58,12 @@ import {
 import { cn } from '@/lib/utils';
 import { cardKindStyles, methodBadgeStyles } from './cardStyles';
 import { ServiceCardChips } from './ServiceCardChips';
-import { resolveNodeState } from './contractNodeStyles';
+import { resolveNodeState, citationHaloClass } from './contractNodeStyles';
 import { parseBackendSections, type BackendSection } from '@/lib/backendFrontmatter';
 import { useDriftStore } from '@/store/drift';
 import { useRollupStore } from '@/store/rollup';
 import { useSubstrateStore } from '@/store/substrate';
+import { useCitationStore } from '@/store/citation';
 
 export type ServiceCardKind =
   | 'api'
@@ -223,6 +224,11 @@ function ServiceCardImpl({ data }: NodeProps) {
     substrate,
   );
 
+  // Phase 13 Plan 07 — citation halo. Stable primitive selector (per 13-06
+  // SUMMARY pattern), no derived array; no useSyncExternalStore hazard.
+  const haloUuid = useCitationStore((s) => s.highlightedUuid);
+  const haloed = haloUuid === d.uuid;
+
   const hasInputs = sections.inputs !== null;
   const hasOutputs = sections.outputs.length > 0;
   const hasSideEffects = sections.sideEffects.length > 0;
@@ -231,7 +237,10 @@ function ServiceCardImpl({ data }: NodeProps) {
   return (
     <div className="flex items-start" data-uuid={d.uuid} data-kind={d.kind}>
       <div
-        className={cn(cardKindStyles({ kind: d.kind, state: visualState }))}
+        className={cn(
+          cardKindStyles({ kind: d.kind, state: visualState }),
+          haloed && citationHaloClass,
+        )}
         style={{ minWidth: 320, maxWidth: 480 }}
       >
         <Handle type="target" position={Position.Top} />

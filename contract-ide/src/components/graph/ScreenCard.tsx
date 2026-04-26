@@ -66,10 +66,11 @@ import { probeRoute } from '@/ipc/inspector';
 import { cn } from '@/lib/utils';
 import { screenCardStyles } from './screenCardStyles';
 import { AtomChipOverlay } from './AtomChipOverlay';
-import { resolveNodeState } from './contractNodeStyles';
+import { resolveNodeState, citationHaloClass } from './contractNodeStyles';
 import { useDriftStore } from '@/store/drift';
 import { useRollupStore } from '@/store/rollup';
 import { useSubstrateStore } from '@/store/substrate';
+import { useCitationStore } from '@/store/citation';
 import { useScreenshotStore } from '@/store/screenshots';
 import { captureIframeScreenshot } from '@/lib/iframeScreenshot';
 
@@ -147,6 +148,12 @@ function ScreenCardImpl({ data }: NodeProps) {
     substrate,
   );
 
+  // Phase 13 Plan 07 — citation halo. Stable primitive selector; coexists with
+  // any existing state ring (haloed superseded screen reads as both orange-
+  // muted AND blue glow simultaneously, by design).
+  const haloUuid = useCitationStore((s) => s.highlightedUuid);
+  const haloed = haloUuid === d.uuid;
+
   // Phase 13 Plan 06: cached screenshot for non-focused twin rendering. Reading
   // by uuid keeps re-renders gated on this specific entry's identity (Map
   // mutation produces new identity per useScreenshotStore contract).
@@ -179,7 +186,10 @@ function ScreenCardImpl({ data }: NodeProps) {
 
   return (
     <div
-      className={cn(screenCardStyles({ state: visualState }))}
+      className={cn(
+        screenCardStyles({ state: visualState }),
+        haloed && citationHaloClass,
+      )}
       style={{ width: 600, minHeight: 400 }}
       data-uuid={d.uuid}
       data-kind="screen"

@@ -33,7 +33,8 @@ import { useGraphStore } from '@/store/graph';
 import { useDriftStore } from '@/store/drift';
 import { useRollupStore } from '@/store/rollup';
 import { useSubstrateStore } from '@/store/substrate';
-import { resolveNodeState } from './contractNodeStyles';
+import { useCitationStore } from '@/store/citation';
+import { resolveNodeState, citationHaloClass } from './contractNodeStyles';
 
 /**
  * AtomChip CVA — bounding-rect overlay pill with state-keyed coloring.
@@ -97,6 +98,10 @@ function AtomChipImpl({ uuid, name, rect }: AtomChipProps) {
   const untracked = useRollupStore((s) => s.untrackedUuids);
   const substrate = useSubstrateStore((s) => s.nodeStates);
   const focusedAtomUuid = useGraphStore((s) => s.focusedAtomUuid);
+  // Phase 13 Plan 07 — citation halo. Orthogonal to `focused` (which is the
+  // Cmd+P L4 atom-hit halo) — both can be true simultaneously without
+  // conflict because each adds its own additive class.
+  const haloUuid = useCitationStore((s) => s.highlightedUuid);
   const state = resolveNodeState(
     uuid,
     drifted,
@@ -105,13 +110,16 @@ function AtomChipImpl({ uuid, name, rect }: AtomChipProps) {
     substrate,
   );
   const focused = focusedAtomUuid === uuid;
+  const haloed = haloUuid === uuid;
 
   return (
     <button
       type="button"
       data-atom-uuid={uuid}
       data-state={state}
-      className={chipStyles({ state, focused })}
+      className={[chipStyles({ state, focused }), haloed ? citationHaloClass : '']
+        .filter(Boolean)
+        .join(' ')}
       style={{
         top: rect.top,
         left: rect.left,

@@ -176,6 +176,29 @@ export type NodeVisualState =
   | 'superseded';
 
 /**
+ * Phase 13 Plan 07 — citation halo class.
+ *
+ * Applied additively (NOT a CVA variant) on top of any existing state ring
+ * when `useCitationStore.highlightedUuid` matches the card/chip's uuid.
+ * Distinct from substrate-state (orange/amber) and drift (red) signals: this
+ * is a TRANSIENT interaction marker (~2s pulse), not a persistent semantic
+ * indicator. The two coexist visually — a rollup_stale (amber) atom that's
+ * also citation-highlighted shows BOTH the amber ring AND the blue halo.
+ *
+ * Subscribers: ServiceCard, ScreenCard, AtomChip. Each reads
+ * `useCitationStore((s) => s.highlightedUuid)` and appends this class when
+ * `highlightedUuid === uuid`.
+ *
+ * Visual: blue-300 ring + soft glow + slight scale-up so the halo is
+ * recognisably "interactive feedback" rather than another semantic state. The
+ * 0.4 alpha glow at 12px keeps it readable at compressed video bitrate (same
+ * legibility constraint as orange-600 + 8px for intent_drifted, see Pitfall 6
+ * in 13-RESEARCH.md).
+ */
+export const citationHaloClass =
+  'ring-2 ring-blue-300 shadow-[0_0_12px_4px_rgba(96,165,250,0.4)] scale-[1.02] transition-all';
+
+/**
  * Compose the visual state for a single uuid from all four upstream signals.
  *
  * Precedence (highest to lowest):
