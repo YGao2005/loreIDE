@@ -421,11 +421,7 @@ export function AppShell() {
     const panel = inspectorPanelRef.current;
     if (!panel) return;
     if (selectedNodeUuid) {
-      if (panel.isCollapsed?.()) {
-        panel.expand?.(50);
-      } else {
-        panel.resize?.(50);
-      }
+      panel.resize?.(50);
     } else {
       panel.collapse?.();
     }
