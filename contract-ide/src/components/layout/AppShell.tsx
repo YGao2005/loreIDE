@@ -33,6 +33,11 @@ import { IntentPalette } from '@/components/command-palette/IntentPalette';
 import { MassEditTrigger } from '@/components/mass-edit/MassEditTrigger';
 import { PRReviewPanel } from '@/components/substrate/PRReviewPanel';
 import { SyncButton } from '@/components/substrate/SyncButton';
+import { VerifierPanel } from '@/components/substrate/VerifierPanel';
+import { HarvestPanel } from '@/components/substrate/HarvestPanel';
+// Phase 13 Plan 09: side-effect import wires window.__demo helpers in dev so
+// DevTools can stage Beat 3 manually. Plan 13-10b replaces with a UI panel.
+import '@/lib/demoOrchestration';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 
 /**
@@ -413,6 +418,7 @@ export function AppShell() {
     if (!panel) return;
     if (selectedNodeUuid) {
       panel.expand?.();
+      panel.resize?.(50);
     } else {
       panel.collapse?.();
     }
@@ -527,6 +533,19 @@ export function AppShell() {
         <div className="fixed top-9 right-4 z-30">
           <SyncButton />
         </div>
+
+        {/* Phase 13 Plan 09 (SUB-08): Beat 3 verifier panel — substrate honors
+            (✓), implicit decisions group (ℹ), and parent-surface orange flag
+            (⚠) with halo on the SCREEN CARD. Driven by useVerifierStore;
+            populated via loadBeat3VerifierResults (window.__demo in dev or
+            plan 13-10b's DemoOrchestrationPanel in production demo mode). */}
+        <VerifierPanel />
+
+        {/* Phase 13 Plan 09 (SUB-08): Beat 4 harvest notification — listens
+            to substrate:nodes-added Tauri event AND polls every 2s as
+            fallback. Renders newly-harvested rules bottom-right; promoted-
+            from-implicit rows carry an amber badge. */}
+        <HarvestPanel />
 
         {/* Backfill historical sessions (Plan 10-04). Top-level modal —
             opened by clicking the SessionStatusIndicator in the footer.
