@@ -1,0 +1,10 @@
+{
+  "_comment": "Source: contract-ide-demo/contract-uuid-plugin/package.json — copied verbatim per Phase 14 Plan 14-01b. JSON cannot host comments, so provenance is in this _comment field; emit script (Plan 14-05) strips it before writing into target.",
+  "name": "contract-uuid-plugin",
+  "version": "0.1.0",
+  "main": "./index.js",
+  "private": true,
+  "dependencies": {
+    "js-yaml": "^4.0.0"
+  }
+}
