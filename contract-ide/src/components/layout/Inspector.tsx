@@ -15,6 +15,7 @@ import { CherrypickModal } from '@/components/cherrypick/CherrypickModal';
 import { SimplifiedInspector } from '@/components/inspector/SimplifiedInspector';
 import { DelegateButton } from '@/components/inspector/DelegateButton';
 import { SubstrateSidePanel } from '@/components/inspector/SubstrateSidePanel';
+import { SourceArchaeologyModal } from '@/components/inspector/SourceArchaeologyModal';
 
 /**
  * Right-hand inspector panel (SHELL-01 + SHELL-05 + INSP-01 + INSP-05).
@@ -283,6 +284,12 @@ export function Inspector() {
 
       {/* Phase 8 Plan 08-05: Cherrypick modal — Dialog overlay */}
       <CherrypickModal />
+
+      {/* Phase 13 Plan 07: Source-archaeology modal — opens when a [source]
+          citation is clicked anywhere in the app. Portaled Dialog so render
+          position is irrelevant; mounting here keeps the React tree single-
+          ownership of citation surfaces under the Inspector. */}
+      <SourceArchaeologyModal />
 
       {/* Phase 11 Plan 04: Delegate button — ALWAYS-VISIBLE footer regardless of active tab.
           Lives in the Inspector container (not the tab body) so it survives tab switches.
