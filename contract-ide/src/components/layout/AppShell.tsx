@@ -35,6 +35,10 @@ import { PRReviewPanel } from '@/components/substrate/PRReviewPanel';
 import { SyncButton } from '@/components/substrate/SyncButton';
 import { VerifierPanel } from '@/components/substrate/VerifierPanel';
 import { HarvestPanel } from '@/components/substrate/HarvestPanel';
+// Phase 13 Plan 10b: dev-mode rehearsal panel — single-click beat triggers
+// reading fixtures shipped by sibling plan 13-10a. Stripped from release
+// builds via import.meta.env.DEV gate + dead-code elimination.
+import { DemoOrchestrationPanel } from '@/components/dev/DemoOrchestrationPanel';
 // Phase 13 Plan 09: side-effect import wires window.__demo helpers in dev so
 // DevTools can stage Beat 3 manually. Plan 13-10b replaces with a UI panel.
 import '@/lib/demoOrchestration';
@@ -417,8 +421,11 @@ export function AppShell() {
     const panel = inspectorPanelRef.current;
     if (!panel) return;
     if (selectedNodeUuid) {
-      panel.expand?.();
-      panel.resize?.(50);
+      if (panel.isCollapsed?.()) {
+        panel.expand?.(50);
+      } else {
+        panel.resize?.(50);
+      }
     } else {
       panel.collapse?.();
     }
@@ -546,6 +553,12 @@ export function AppShell() {
             fallback. Renders newly-harvested rules bottom-right; promoted-
             from-implicit rows carry an amber badge. */}
         <HarvestPanel />
+
+        {/* Phase 13 Plan 10b: dev-mode demo orchestration rehearsal panel.
+            Bottom-left z-50; coexists with HarvestPanel (bottom-right z-40)
+            and SyncButton/VerifierPanel (top-right). Stripped from release
+            builds via import.meta.env.DEV gate. */}
+        {import.meta.env.DEV && <DemoOrchestrationPanel />}
 
         {/* Backfill historical sessions (Plan 10-04). Top-level modal —
             opened by clicking the SessionStatusIndicator in the footer.

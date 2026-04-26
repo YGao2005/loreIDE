@@ -13,7 +13,12 @@
  * card, per script + SC 6.
  */
 
-import { useVerifierStore } from '@/store/verifier';
+import { invoke } from '@tauri-apps/api/core';
+import {
+  useVerifierStore,
+  type VerifierRow,
+  type ImplicitDecisionRow,
+} from '@/store/verifier';
 
 /**
  * Load the canonical Beat 3 verifier output (6 honors + 3 implicit + 1 flag).
@@ -99,4 +104,42 @@ if (typeof window !== 'undefined') {
     ...(window.__demo ?? {}),
     loadBeat3VerifierResults,
   };
+}
+
+/**
+ * Plan 13-10b — fixture-driven Beat 3 + Beat 4 triggers.
+ *
+ * `loadAndApplyBeat3Verifier` reads beat3-verifier.json via the Rust IPC
+ * (fixture file shipped by sibling plan 13-10a) and applies the parsed rows
+ * to useVerifierStore. This is the demo-rehearsal counterpart to plan 13-09's
+ * inline `loadBeat3VerifierResults` (which keeps hardcoded data for DevTools
+ * convenience). The fixture-driven path is what plan 13-11 rehearsal uses.
+ *
+ * `triggerBeat4Harvest` invokes the Rust IPC that emits
+ * `substrate:nodes-added` with the harvested_nodes payload from
+ * beat4-harvest.json — HarvestPanel's listener (plan 13-09) consumes the
+ * event and fires green halos via animateHarvestArrival per N9.
+ */
+
+interface Beat3VerifierFixture {
+  rows?: VerifierRow[];
+  implicitDecisions?: ImplicitDecisionRow[];
+  flag?: VerifierRow;
+}
+
+export async function loadAndApplyBeat3Verifier(): Promise<void> {
+  const fixture = await invoke<Beat3VerifierFixture>(
+    'load_beat3_verifier_fixture',
+  );
+  const rows = fixture.rows ?? [];
+  const flagRows = fixture.flag ? [fixture.flag] : [];
+  const implicit = fixture.implicitDecisions ?? [];
+  useVerifierStore.getState().setResults([...rows, ...flagRows], implicit);
+}
+
+export async function triggerBeat4Harvest(): Promise<void> {
+  // Rust side reads beat4-harvest.json + emits substrate:nodes-added; the
+  // HarvestPanel subscriber (plan 13-09) receives the harvested_nodes array
+  // and fires green halos on each attached_to_uuid per N9.
+  await invoke('emit_beat4_harvest');
 }
