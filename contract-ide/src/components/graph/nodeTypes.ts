@@ -1,6 +1,7 @@
 import { ContractNode } from './ContractNode';
 import { GroupNode } from './GroupNode';
 import { ServiceCard } from './ServiceCard';
+import { ScreenCard } from './ScreenCard';
 
 // MUST be a module-level const. Inline {{ contract: ContractNode }} in JSX
 // creates a new object every render → React Flow remounts every node.
@@ -12,11 +13,14 @@ import { ServiceCard } from './ServiceCard';
 // `serviceCard` — Phase 13 Plan 04 (CARD-02 / CARD-03): backend participant
 //                 card (api / lib / data / external / job / cron / event)
 //                 with Stripe-API-docs-style structured rendering.
-//                 Plan 13-05 will append `screenCard` next (additive — Wave 2
-//                 serialization_hint mandates 13-04 → 13-05 nodeTypes.ts edits
-//                 run sequentially).
+// `screenCard`  — Phase 13 Plan 05 (CARD-01): UI-mode L3 trigger card with
+//                 iframe at the screen contract's `route` + atom-chip overlay
+//                 layered in the parent (NOT inside iframe — sidesteps
+//                 cross-origin / pan-zoom interference). Inspect/Interact
+//                 mode toggle in header.
 export const nodeTypes = {
   contract: ContractNode,
   group: GroupNode,
   serviceCard: ServiceCard,
+  screenCard: ScreenCard,
 } as const;
