@@ -5,7 +5,7 @@
   "description": "Bootstrap a .contracts/ tree from any Next.js + Prisma + TS repo. Skill ships its own deps so it's self-contained at clone time.",
   "type": "module",
   "scripts": {
-    "test": "node --test scripts/helpers/__tests__/"
+    "test": "node --test 'scripts/helpers/__tests__/*.test.mjs'"
   },
   "dependencies": {
     "tinyglobby": "^0.2.0",
