@@ -76,6 +76,14 @@ CLAUDE.md, planning docs, demo scripts, or existing code, it is not net-new — 
 "Feature A reuses the 5 rules from feature B" is a consequence; capture the underlying rule
 once where it was made, not every place it applies.
 
+**Casual phrasing is not disqualifying.** When the user states a team-wide commitment in
+passing — a design-system token ("destructive actions use #FF0000"), a coding convention
+("we always wrap fetch in our retry helper"), a deployment norm ("staging deploys run on
+merge to main"), a naming standard — extract it as a complete one-sentence Constraint, even
+if their phrasing was an aside. The portability test still applies: the canonical-form rule
+must change what a future agent does on an unrelated task. Substance over phrasing — but a
+single-clause aside about an individual user's preference for *this* session is still noise.
+
 For `constraint` / `decision`: prefer ZERO nodes over weak nodes.
 
 For `open_question` / `resolved_question`: capture only when the question itself, OR its
