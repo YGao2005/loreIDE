@@ -154,6 +154,7 @@ Progress: [██████████] 96% (7/13 phases complete + Phase 10 
 | Phase 14-codebase-to-contracts-bootstrap-skill-demo-application P05 | 13 min | 2 tasks | 11 files |
 | Phase 15 P01 | 9 | 3 tasks | 7 files |
 | Phase 15 P02 | 11 | 3 tasks | 5 files |
+| Phase 15 P03 | 8 | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -448,6 +449,8 @@ Recent decisions affecting current work:
 - [Phase 15]: FTS tombstone fix: v8 replacement substrate_nodes_au trigger with WHERE new.invalid_at IS NULL guard — tombstoned rows removed from FTS, not re-indexed
 - [Phase 15]: resolveKindFilter + resolveSubstrateRoute + isSubstrateKind exported as pure helpers from IntentPalette.tsx — environment:node tests match established project patterns
 - [Phase 15]: applies_when: None in canvas bulk read; only get_substrate_node_detail SELECT extended — minimizes hot-path DB overhead
+- [Phase 15]: before_text audit field stores old row text only (v1); applies_when changes not captured; TODO(v2) store JSON
+- [Phase 15]: onRefineSuccess fires with ORIGINAL uuid BEFORE openCitation(newUuid) re-pointing — direct callback over post-hoc inference for flag-clear
 
 ### Pending Todos
 
