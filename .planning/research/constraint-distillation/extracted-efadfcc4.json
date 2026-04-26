@@ -1,0 +1,128 @@
+[
+  {
+    "id": "c8-empty-string-fk-coerce-null",
+    "type": "constraint",
+    "text": "When binding foreign-key columns from JS/TS to SQLite via Rust, coerce empty strings to NULL — SQLite checks `REFERENCES nodes(uuid)` against `''` and fails with FK constraint error (code 787).",
+    "scope": "module:src-tauri/**/*.rs + ts callers",
+    "applies_when": "when writing code that inserts rows with foreign-key columns populated from nullable upstream fields (parent_uuid, canonical_uuid, route, etc.)",
+    "source": {
+      "kind": "session",
+      "session_id": "efadfcc4-f76b-498c-96d1-d017947c0e1f",
+      "turn_ref": "L315-328",
+      "quote": "`dddd`'s `parent_uuid` is stored as empty string `''`, not `NULL`. On upsert, Rust binds `''` → FK check looks for `nodes(uuid='')` → none → FK fails. Fix: coerce empty strings to `null` before send.",
+      "actor": "claude"
+    },
+    "confidence": "inferred",
+    "valid_at": "2026-04-23T15:54:00Z",
+    "invalid_at": null,
+    "superseded_by": null
+  },
+  {
+    "id": "c9-useeffect-find-refires",
+    "type": "constraint",
+    "text": "React `useEffect` that depends on a store-derived object (from `.find()`, `.filter()`, etc.) refires on every store update because `.find()` returns a new reference — depend on the stable key (UUID) instead, or guard the effect body with a key-equality check.",
+    "scope": "task-pattern:react-store-integration",
+    "applies_when": "when writing a React useEffect whose dependency is an object pulled out of a store collection",
+    "source": {
+      "kind": "session",
+      "session_id": "efadfcc4-f76b-498c-96d1-d017947c0e1f",
+      "turn_ref": "L232, L261-271",
+      "quote": "`selectedNode` is `nodes.find(...)` — a new object reference every time `nodes` updates (file watcher, save-triggered rescan). Effect refires → `loadNode` resets `contractText` to stale `node.contract_body` mid-keystroke → edit reverts.",
+      "actor": "claude"
+    },
+    "confidence": "inferred",
+    "valid_at": "2026-04-23T15:54:00Z",
+    "invalid_at": null,
+    "superseded_by": null
+  },
+  {
+    "id": "c10-rust-mutex-state-volatile",
+    "type": "constraint",
+    "text": "Tauri Rust state stored in `Mutex<Option<T>>` is in-memory only and resets to `None` on full process restart — don't rely on it alone for anything that must survive restart. Pair it with a durable source (localStorage, SQLite, or a config file) and rehydrate on boot.",
+    "scope": "module:src-tauri",
+    "applies_when": "when storing user-session state or workspace config (open repo, auth token, last-selected item) that should persist across app restarts",
+    "source": {
+      "kind": "session",
+      "session_id": "efadfcc4-f76b-498c-96d1-d017947c0e1f",
+      "turn_ref": "L456-458",
+      "quote": "Rust `RepoState` is in-memory only (`Mutex<Option<PathBuf>>`). After full restart, it's `None` — but nodes still render from SQLite cache. `getRepoPath()` returns null → store stays null → save skipped. Fix: persist repo path in `localStorage` on open, rehydrate on boot.",
+      "actor": "claude"
+    },
+    "confidence": "inferred",
+    "valid_at": "2026-04-23T15:54:00Z",
+    "invalid_at": null,
+    "superseded_by": null
+  },
+  {
+    "id": "c11-tauri-hot-reload-boundary",
+    "type": "constraint",
+    "text": "Tauri TS changes hot-reload instantly; Rust changes (new commands, signature changes, FK binding logic, handler registration) require Ctrl+C and `npm run tauri dev` restart. When shipping a cross-boundary fix, explicitly tell the user which side needs a restart.",
+    "scope": "task-pattern:tauri-development",
+    "applies_when": "when shipping a fix or feature that touches both TS and Rust in a Tauri project",
+    "source": {
+      "kind": "session",
+      "session_id": "efadfcc4-f76b-498c-96d1-d017947c0e1f",
+      "turn_ref": "L336-337, L384",
+      "quote": "TS + Rust both green. Tauri will hot-reload TS; Rust changes require a restart of the dev server (Ctrl+C then `npm run tauri dev` again) for `upsert_node_pub` to use the new `parent_fk` binding.",
+      "actor": "claude"
+    },
+    "confidence": "inferred",
+    "valid_at": "2026-04-23T15:54:00Z",
+    "invalid_at": null,
+    "superseded_by": null
+  },
+  {
+    "id": "c12-code-tab-enoent-means-wrong-repo",
+    "type": "constraint",
+    "text": "When the Inspector Code tab fails with ENOENT on `fs::canonicalize(repo_path.join(rel_path))`, the primary suspect is a repo/contract mismatch (contract was seeded in repo A but repo B is loaded) — not a missing file. Always verify `getRepoPath()` + contract provenance before touching the resolve logic.",
+    "scope": "module:contract-ide-code-tab",
+    "applies_when": "when the Code tab or any repo-relative file resolver throws ENOENT on a path that should exist",
+    "source": {
+      "kind": "session",
+      "session_id": "efadfcc4-f76b-498c-96d1-d017947c0e1f",
+      "turn_ref": "L178-192",
+      "quote": "The Code tab isn't broken — it's a repo/contract mismatch. The node has `code_ranges[0].file: src/components/CheckoutButton.tsx`. That file exists at `/tmp/phase6-uat/src/components/CheckoutButton.tsx`. The loaded repo in the running app isn't `/tmp/phase6-uat` — hence canonicalize → ENOENT.",
+      "actor": "claude"
+    },
+    "confidence": "inferred",
+    "valid_at": "2026-04-23T15:54:00Z",
+    "invalid_at": null,
+    "superseded_by": null
+  },
+  {
+    "id": "c13-no-silent-console-log-for-user-actions",
+    "type": "constraint",
+    "text": "User-visible actions (button clicks, command triggers) must never reduce to a silent `console.log`. Emit inline feedback (toast, amber hint, status line) even when the underlying feature is stubbed — otherwise the user can't distinguish 'clicked and nothing happened' from 'clicked and it silently worked'.",
+    "scope": "task-pattern:ui-feedback",
+    "applies_when": "when stubbing, mocking, or placeholder-implementing a user-triggered action",
+    "source": {
+      "kind": "session",
+      "session_id": "efadfcc4-f76b-498c-96d1-d017947c0e1f",
+      "turn_ref": "L229, L277, L486",
+      "quote": "Reconcile button — visible inline 'Reconcile flow ships in Phase 7' hint instead of silent `console.log`.",
+      "actor": "claude"
+    },
+    "confidence": "inferred",
+    "valid_at": "2026-04-23T15:54:00Z",
+    "invalid_at": null,
+    "superseded_by": null
+  },
+  {
+    "id": "c14-devlog-mirror-for-remote-debugging",
+    "type": "constraint",
+    "text": "When an agent needs to debug a running Tauri/desktop app without direct UI access, wire a `devlog` Rust command + `installDevLog()` TS shim that mirrors `console.*` to `/tmp/<app>.log` — the agent can then tail the file directly instead of asking the user to copy-paste console output repeatedly.",
+    "scope": "task-pattern:tauri-debugging",
+    "applies_when": "when an agent needs observability into a running desktop app (Tauri, Electron) without clicking the UI itself, especially for multi-round debugging loops",
+    "source": {
+      "kind": "session",
+      "session_id": "efadfcc4-f76b-498c-96d1-d017947c0e1f",
+      "turn_ref": "L362-370, L376, L490",
+      "quote": "Add a tiny hook in `main.tsx` that mirrors `console.*` to a file the Tauri side writes. Then I `tail -f /tmp/contract-ide.log` via Bash. You keep the app running; I see every log I asked you to paste. ~20 lines of code.",
+      "actor": "claude"
+    },
+    "confidence": "inferred",
+    "valid_at": "2026-04-23T15:54:00Z",
+    "invalid_at": null,
+    "superseded_by": null
+  }
+]

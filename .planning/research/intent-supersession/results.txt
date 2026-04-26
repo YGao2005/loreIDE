@@ -1,0 +1,10 @@
+{"id": "d1", "verdict": "DRIFTED", "reasoning": "Accepting stale reads and skipping write-through prioritizes convenience over correctness, conflicting with the new reliability focus.", "confidence": 0.85}
+{"id": "d2", "verdict": "DRIFTED", "reasoning": "Skipping unit tests on routing trades test coverage for speed, which undermines correctness and operational reliability.", "confidence": 0.8}
+{"id": "d3", "verdict": "NOT_DRIFTED", "reasoning": "Strict TypeScript improves correctness and is aligned with both shipping speed and reliability priorities.", "confidence": 0.95}
+{"id": "d4", "verdict": "DRIFTED", "reasoning": "Manual laptop deploys directly conflict with operational reliability, observability, and safe production practices.", "confidence": 0.95}
+{"id": "d5", "verdict": "NOT_DRIFTED", "reasoning": "UI component library choice is priority-neutral with respect to operational reliability.", "confidence": 0.9}
+{"id": "d6", "verdict": "DRIFTED", "reasoning": "Omitting error boundaries rejects graceful degradation, which the new L0 treats as first-class.", "confidence": 0.9}
+{"id": "d7", "verdict": "NOT_DRIFTED", "reasoning": "Package manager choice is priority-neutral and doesn't affect production reliability.", "confidence": 0.95}
+{"id": "d8", "verdict": "NEEDS_HUMAN_REVIEW", "reasoning": "Single-region may be acceptable with a strong SLO or drifted if multi-region resilience is now required; depends on reliability target.", "confidence": 0.6}
+{"id": "d9", "verdict": "NOT_DRIFTED", "reasoning": "ENV-var feature flags are simple but don't inherently conflict with reliability; they can support safe rollout.", "confidence": 0.65}
+{"id": "d10", "verdict": "DRIFTED", "reasoning": "Fire-and-forget with no retries rejects graceful degradation and correctness guarantees central to the new L0.", "confidence": 0.95}

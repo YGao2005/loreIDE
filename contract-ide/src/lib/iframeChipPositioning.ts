@@ -177,3 +177,183 @@ export async function requestChipRects(
     target.postMessage({ type: REQUEST_TYPE, uuids, requestId }, '*');
   });
 }
+
+// ---------------------------------------------------------------------------
+// Phase 13 Plan 12 — Snapshot + Inspect-mode protocol
+//
+// Same postMessage transport as requestChipRects above, with three new
+// message types: snapshot capture (synchronous request/reply with timeout)
+// and inspect enable/disable + hover/click streaming (subscription model).
+// ---------------------------------------------------------------------------
+
+const SNAPSHOT_REQUEST_TYPE = 'contract-ide:capture-snapshot';
+const SNAPSHOT_RESPONSE_TYPE = 'contract-ide:snapshot';
+const INSPECT_ENABLE_TYPE = 'contract-ide:inspect-enable';
+const INSPECT_DISABLE_TYPE = 'contract-ide:inspect-disable';
+const INSPECT_HOVER_TYPE = 'contract-ide:inspect-hover';
+const INSPECT_CLICK_TYPE = 'contract-ide:inspect-click';
+
+const SNAPSHOT_TIMEOUT_MS = 3000;
+
+export interface SnapshotResult {
+  dataUrl: string;
+  rects: ChipRect[];
+}
+
+interface SnapshotMessage {
+  type: typeof SNAPSHOT_RESPONSE_TYPE;
+  requestId: string;
+  dataUrl?: string;
+  rects?: Array<{
+    uuid: string;
+    rect: {
+      x?: number;
+      y?: number;
+      top?: number;
+      left?: number;
+      width: number;
+      height: number;
+    };
+  }>;
+  error?: string;
+}
+
+function normaliseRects(
+  raw: SnapshotMessage['rects'] | undefined,
+): ChipRect[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((r) => r && typeof r.uuid === 'string' && r.rect)
+    .map((r) => ({
+      uuid: r.uuid,
+      rect: {
+        top: r.rect.top ?? r.rect.y ?? 0,
+        left: r.rect.left ?? r.rect.x ?? 0,
+        width: r.rect.width,
+        height: r.rect.height,
+      },
+    }));
+}
+
+/**
+ * Ask the iframe to capture a PNG snapshot of its current viewport plus the
+ * rects of every `[data-contract-uuid]` element. Pairs screenshot + rects in
+ * a single frame so they're temporally consistent.
+ *
+ * The capture runs INSIDE the iframe (same-origin to its own document) using
+ * the SVG-foreignObject + canvas trick. Cross-origin from the parent's POV
+ * (IDE on :1420, demo on :3000) is sidestepped because the responder lives
+ * in the iframe.
+ *
+ * @returns SnapshotResult on success; null on any failure (timeout,
+ *          serialization error, tainted canvas, missing responder).
+ *          Never throws.
+ */
+export async function requestSnapshot(
+  iframe: HTMLIFrameElement,
+  timeoutMs: number = SNAPSHOT_TIMEOUT_MS,
+): Promise<SnapshotResult | null> {
+  const target = iframe.contentWindow;
+  if (!target) return null;
+
+  const requestId = nextRequestId();
+
+  return new Promise<SnapshotResult | null>((resolve) => {
+    let settled = false;
+    const finish = (value: SnapshotResult | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutHandle);
+      window.removeEventListener('message', listener);
+      resolve(value);
+    };
+
+    const listener = (e: MessageEvent) => {
+      if (e.source !== target) return;
+      const data = e.data as Partial<SnapshotMessage> | null | undefined;
+      if (!data || data.type !== SNAPSHOT_RESPONSE_TYPE) return;
+      if (data.requestId !== requestId) return;
+      if (data.error || !data.dataUrl) {
+        finish(null);
+        return;
+      }
+      finish({ dataUrl: data.dataUrl, rects: normaliseRects(data.rects) });
+    };
+
+    const timeoutHandle = setTimeout(() => finish(null), timeoutMs);
+    window.addEventListener('message', listener);
+    target.postMessage({ type: SNAPSHOT_REQUEST_TYPE, requestId }, '*');
+  });
+}
+
+/** Tell the iframe to enable inspect-mode listeners (mousemove/click). */
+export function enableInspect(iframe: HTMLIFrameElement): void {
+  iframe.contentWindow?.postMessage({ type: INSPECT_ENABLE_TYPE }, '*');
+}
+
+/** Tell the iframe to disable inspect-mode listeners. */
+export function disableInspect(iframe: HTMLIFrameElement): void {
+  iframe.contentWindow?.postMessage({ type: INSPECT_DISABLE_TYPE }, '*');
+}
+
+export type InspectHoverPayload =
+  | { uuid: string; rect: { top: number; left: number; width: number; height: number } }
+  | { uuid: null };
+
+export type InspectClickPayload = InspectHoverPayload;
+
+interface InspectEventMessage {
+  type: typeof INSPECT_HOVER_TYPE | typeof INSPECT_CLICK_TYPE;
+  uuid: string | null;
+  rect?: {
+    x?: number;
+    y?: number;
+    top?: number;
+    left?: number;
+    width: number;
+    height: number;
+  };
+}
+
+function normaliseInspectPayload(
+  msg: InspectEventMessage,
+): InspectHoverPayload {
+  if (msg.uuid === null || !msg.rect) return { uuid: null };
+  return {
+    uuid: msg.uuid,
+    rect: {
+      top: msg.rect.top ?? msg.rect.y ?? 0,
+      left: msg.rect.left ?? msg.rect.x ?? 0,
+      width: msg.rect.width,
+      height: msg.rect.height,
+    },
+  };
+}
+
+/**
+ * Subscribe to inspect-mode hover and click events from the iframe. Returns
+ * an unsubscribe function. Caller is responsible for first calling
+ * `enableInspect(iframe)` to start the iframe-side listeners; this function
+ * only sets up the parent-side message listener.
+ */
+export function subscribeInspect(
+  iframe: HTMLIFrameElement,
+  onHover: (p: InspectHoverPayload) => void,
+  onClick: (p: InspectClickPayload) => void,
+): () => void {
+  const target = iframe.contentWindow;
+  if (!target) return () => {};
+
+  const handler = (e: MessageEvent) => {
+    if (e.source !== target) return;
+    const data = e.data as Partial<InspectEventMessage> | null | undefined;
+    if (!data || typeof data.type !== 'string') return;
+    if (data.type === INSPECT_HOVER_TYPE) {
+      onHover(normaliseInspectPayload(data as InspectEventMessage));
+    } else if (data.type === INSPECT_CLICK_TYPE) {
+      onClick(normaliseInspectPayload(data as InspectEventMessage));
+    }
+  };
+  window.addEventListener('message', handler);
+  return () => window.removeEventListener('message', handler);
+}

@@ -60,9 +60,13 @@ export async function runAgent(
   scopeUuid: string | null,
   options: RunAgentOptions = {},
 ): Promise<string> {
+  // Tauri 2 converts JS camelCase keys → Rust snake_case params automatically.
+  // Sending `scope_uuid` (snake_case) here would NOT map to the Rust
+  // `scope_uuid` parameter — Tauri expects `scopeUuid` from JS. Mismatch
+  // silently drops the value (Rust receives None).
   return invoke<string>('run_agent', {
     prompt,
-    scope_uuid: scopeUuid,
+    scopeUuid,
     model: options.model,
     effort: options.effort,
   });

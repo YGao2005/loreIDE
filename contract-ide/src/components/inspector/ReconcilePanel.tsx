@@ -86,7 +86,7 @@ export default function ReconcilePanel({ node, open, onClose }: Props) {
       <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Reconcile {node.name ?? node.uuid.slice(0, 8)}</DialogTitle>
+            <DialogTitle>Reconcile {node.name ?? 'Untitled contract'}</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-2 mt-3">
             <button
@@ -136,7 +136,7 @@ export default function ReconcilePanel({ node, open, onClose }: Props) {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>
-              Reconcile {node.name ?? node.uuid.slice(0, 8)}
+              Reconcile {node.name ?? 'Untitled contract'}
               <span className="ml-2 text-xs font-normal text-amber-500">
                 {isPinned ? 'pinned · rollup stale' : 'rollup stale'}
               </span>
@@ -166,7 +166,7 @@ export default function ReconcilePanel({ node, open, onClose }: Props) {
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Reconcile {node.name ?? node.uuid.slice(0, 8)}</DialogTitle>
+          <DialogTitle>Reconcile {node.name ?? 'Untitled contract'}</DialogTitle>
         </DialogHeader>
         <div className="py-4 text-sm text-muted-foreground text-center">
           {rollupState === 'untracked'

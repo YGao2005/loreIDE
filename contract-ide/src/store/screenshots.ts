@@ -1,20 +1,27 @@
 /**
- * Phase 13 Plan 06 — Screenshot cache for the Beat 4 two-flow case.
+ * Phase 13 Plan 06 + 12 — Screenshot + chip-rect cache.
  *
- * The canvas-wide perf budget allows ONE live iframe; non-focused flows
- * render a cached PNG instead. ScreenCard (when focused) captures a snapshot
- * of its iframe content via `captureIframeScreenshot` and stores the data URL
- * here; non-focused ScreenCards read by uuid and render an `<img>` instead
- * of mounting another iframe.
+ * Originally the canvas-wide perf budget allowed ONE live iframe; non-focused
+ * flows rendered a cached PNG instead. Phase 13 Plan 12 extends this: even
+ * the focused screen renders the cached PNG on canvas (so wheel events flow
+ * to react-flow without iframe-gesture conflicts). The live iframe is mounted
+ * hidden offscreen, captures snapshot+rects on load, then stays hidden until
+ * the user clicks ⤢ to enter ScreenViewerOverlay.
  *
- * Storage: a Map<uuid, dataUrl>. Mutations replace the Map identity so
- * Zustand's referential inequality triggers re-renders (mirrors the Set
+ * Cache value is now a richer entry (`ScreenshotEntry`) that pairs the PNG
+ * data URL with the chip rects captured in the same frame. This lets
+ * AtomChipOverlay render chips on a screenshot when no live iframe is
+ * available, while staying temporally consistent (chips drawn at positions
+ * that match the screenshot).
+ *
+ * Storage: a Map<uuid, ScreenshotEntry>. Mutations replace the Map identity
+ * so Zustand's referential inequality triggers re-renders (mirrors the Set
  * mutation pattern in useDriftStore + useRollupStore).
  *
  * Lifecycle:
- *   - `setScreenshot(uuid, dataUrl)` — called by ScreenCard's iframe `load`
- *     handler when isFocused === true. Subsequent re-captures (file-change
- *     watcher event) overwrite the previous dataUrl.
+ *   - `setEntry(uuid, entry)` — called by ScreenCard's iframe `load` handler
+ *     after `requestSnapshot` returns. Subsequent re-captures (↻ button)
+ *     overwrite the previous entry.
  *   - `clear(uuid?)` — clears one entry or the entire cache (e.g., when the
  *     user opens a new repo, all cached screenshots are stale).
  *
@@ -23,46 +30,60 @@
  */
 
 import { create } from 'zustand';
+import type { ChipRect } from '@/lib/iframeChipPositioning';
+
+export interface ScreenshotEntry {
+  /** PNG data URL — `data:image/png;base64,...`. Use directly as <img src=...>. */
+  dataUrl: string;
+  /**
+   * Chip rects captured in the same frame as the screenshot, in iframe-local
+   * coordinates (the iframe's full target dimensions, e.g. 1280×800). Consumers
+   * scale these to display dimensions when rendering chip overlays on the
+   * cached <img>.
+   */
+  rects: ChipRect[];
+  /** `Date.now()` at capture — for "snapshot N seconds old" affordances. */
+  capturedAt: number;
+}
 
 interface ScreenshotState {
   /**
-   * Map<uuid, dataUrl>. The dataUrl is a `data:image/png;base64,...` string
-   * suitable for direct use as an <img src=...>. Identity changes on every
-   * mutation so Zustand re-renders subscribers.
+   * Map<uuid, ScreenshotEntry>. Identity changes on every mutation so Zustand
+   * re-renders subscribers.
    */
-  cache: Map<string, string>;
+  cache: Map<string, ScreenshotEntry>;
 
-  /**
-   * Store a captured screenshot for a contract uuid (typically a UI screen
-   * contract). Replaces any previous capture for the same uuid.
-   */
-  setScreenshot: (uuid: string, dataUrl: string) => void;
+  /** Store a captured snapshot + rects for a screen contract uuid. */
+  setEntry: (uuid: string, entry: ScreenshotEntry) => void;
 
-  /**
-   * Read the cached screenshot for a uuid. Returns null when no capture
-   * exists yet — caller should render a placeholder ("capturing…") or fall
-   * through to whatever pre-load fixture screenshot is available.
-   */
+  /** Read the cached entry for a uuid. Returns null when no capture exists. */
+  getEntry: (uuid: string) => ScreenshotEntry | null;
+
+  /** Convenience accessor for the dataUrl (backwards-compatible). */
   getScreenshot: (uuid: string) => string | null;
 
-  /**
-   * Clear one entry (when its contract changed and the cached screenshot is
-   * stale) or the entire cache (when the repo is reset).
-   */
+  /** Convenience accessor for the cached rects. */
+  getCachedRects: (uuid: string) => ChipRect[] | null;
+
+  /** Clear one entry or the entire cache. */
   clear: (uuid?: string) => void;
 }
 
 export const useScreenshotStore = create<ScreenshotState>((set, get) => ({
   cache: new Map(),
 
-  setScreenshot: (uuid, dataUrl) =>
+  setEntry: (uuid, entry) =>
     set((s) => {
       const next = new Map(s.cache);
-      next.set(uuid, dataUrl);
+      next.set(uuid, entry);
       return { cache: next };
     }),
 
-  getScreenshot: (uuid) => get().cache.get(uuid) ?? null,
+  getEntry: (uuid) => get().cache.get(uuid) ?? null,
+
+  getScreenshot: (uuid) => get().cache.get(uuid)?.dataUrl ?? null,
+
+  getCachedRects: (uuid) => get().cache.get(uuid)?.rects ?? null,
 
   clear: (uuid) =>
     set((s) => {

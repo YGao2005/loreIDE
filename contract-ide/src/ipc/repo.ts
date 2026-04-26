@@ -95,6 +95,43 @@ export async function pickAndOpenRepo(
   return result;
 }
 
+export interface SwitchRepoResult {
+  outcome: 'opened' | 'cancelled' | 'error';
+  scan?: ScanResult;
+  error?: string;
+}
+
+/**
+ * UI-side wrapper around `pickAndOpenRepo` that bundles the scan-result
+ * handling (refresh graph store, surface errors, restart watcher). Both the
+ * sidebar Switch-Repo button and GraphPlaceholder's empty-state Open button
+ * route through here so the post-scan side effects stay in one place.
+ */
+export async function switchRepoFromUi(): Promise<SwitchRepoResult> {
+  try {
+    const scan = await pickAndOpenRepo(async (_count, errors) => {
+      await useGraphStore.getState().refreshNodes();
+      if (errors.length > 0) {
+        console.warn('[watcher] refresh errors:', errors);
+      }
+    });
+    if (scan === null) return { outcome: 'cancelled' };
+    if (scan.errorCount > 0) {
+      return {
+        outcome: 'error',
+        scan,
+        error:
+          `Scan completed with ${scan.errorCount} error(s):\n` +
+          scan.errors.slice(0, 3).join('\n'),
+      };
+    }
+    await useGraphStore.getState().refreshNodes();
+    return { outcome: 'opened', scan };
+  } catch (e) {
+    return { outcome: 'error', error: String(e) };
+  }
+}
+
 /**
  * Invoke `open_repo` directly with a known path (for programmatic use or
  * reload — does not show a dialog).

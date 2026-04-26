@@ -57,13 +57,32 @@ a system fallback will infer it from the session's touched files.
 
 ## Quality bar
 
-Each substrate node should answer: "Would I want this injected automatically into a future
-session whose goal matches `applies_when`?" If no, drop it.
+Each substrate node must be **net-new and portable**. Substrate is what the team is committing
+to *now* that a future agent on a *different task* in this codebase would benefit from knowing.
 
-For constraint and decision nodes, prefer fewer high-quality nodes over many low-quality ones.
+**The hard test.** "If I read this node on an unrelated future task, would it change what I
+do?" If no, drop it. Substrate that only makes sense inside this exact session, file, or demo
+beat is noise — it erodes trust in the harvest surface.
 
-For open_question and resolved_question nodes, capture them whenever a question gets raised
-or settled — these are higher-volume but cheap to keep.
+**Skip orientation Q&A.** When the user's question is "what is X?", "how does Y work?", or
+"explain Z," the agent's answer is documentation, not substrate. Do not extract nodes unless
+the answer surfaces a NEW rule the team is committing to going forward.
+
+**Skip session/demo logistics.** "Implement X live during Beat 4," "leave this empty until the
+demo," "user is currently reviewing Y" — these are task-specific scheduling, not rules.
+
+**Skip recap of already-documented state.** If the transcript merely restates what's in
+CLAUDE.md, planning docs, demo scripts, or existing code, it is not net-new — drop it.
+"Feature A reuses the 5 rules from feature B" is a consequence; capture the underlying rule
+once where it was made, not every place it applies.
+
+For `constraint` / `decision`: prefer ZERO nodes over weak nodes.
+
+For `open_question` / `resolved_question`: capture only when the question itself, OR its
+resolution, would matter on a *different* task. Pure scheduling questions ("should I do this
+now or later?") and questions about the user's intent in the current chat are not substrate.
+
+When in doubt: drop it.
 
 ## Candidate atom UUIDs in scope
 

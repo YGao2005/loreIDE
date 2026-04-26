@@ -118,11 +118,6 @@ export function ChatPanel() {
     }
   };
 
-  // Scope chip label.
-  const scopeChipLabel = selectedNode
-    ? `${selectedNode.name}${scopeCtx ? ` (${scopeCtx.neighbors.length} neighbors)` : ''}`
-    : 'No scope selected';
-
   // Status indicator text.
   const statusText: Record<string, string> = {
     idle: '',
@@ -133,33 +128,73 @@ export function ChatPanel() {
 
   return (
     <div className="h-full w-full bg-background flex flex-col">
-      {/* Scope context chip + status indicator */}
-      <div className="px-4 py-1.5 border-b border-border/30 shrink-0">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-muted-foreground/60">Scope:</span>
-          <span
-            className={cn(
-              'text-[11px] px-1.5 py-0.5 rounded font-mono',
-              selectedNode
-                ? 'bg-muted/60 text-foreground/80'
-                : 'text-muted-foreground/50',
-            )}
-          >
-            {scopeChipLabel}
-          </span>
-          {agentStatus !== 'idle' && (
+      {/* Scope context card + status indicator. Communicates what the agent
+          will use as context — same uuid as bottom Inspector + canvas selection
+          ring. This panel is the "agent's view" of what you're looking at. */}
+      <div className="px-3 pt-2 pb-2 border-b border-border/30 shrink-0">
+        {selectedNode ? (
+          <div className="flex items-center gap-2 min-w-0">
             <span
-              className={cn(
-                'ml-auto text-[10px] px-1.5 py-0.5 rounded',
-                agentStatus === 'running' && 'bg-teal-100/30 text-teal-600',
-                agentStatus === 'complete' && 'bg-muted text-muted-foreground',
-                agentStatus === 'error' && 'bg-red-100/30 text-red-600',
-              )}
+              className="inline-flex items-center shrink-0 gap-1 px-1.5 py-0.5 rounded font-mono text-[9px] uppercase tracking-wide bg-teal-500/10 text-teal-700 dark:text-teal-300 border border-teal-500/20"
+              title="Agent context — passed to the LLM with your message"
             >
-              {statusText[agentStatus]}
+              <span className="size-1.5 rounded-full bg-teal-500" aria-hidden />
+              context
             </span>
-          )}
-        </div>
+            <span
+              className="inline-flex items-center shrink-0 px-1.5 py-0.5 rounded font-mono text-[9px] bg-muted/60 text-foreground/70"
+              title={`${selectedNode.level} · ${selectedNode.kind}`}
+            >
+              {selectedNode.level} · {selectedNode.kind}
+            </span>
+            <span
+              className="text-xs font-medium truncate text-foreground/90"
+              title={selectedNode.name}
+            >
+              {selectedNode.name}
+            </span>
+            {scopeCtx && scopeCtx.neighbors.length > 0 && (
+              <span
+                className="shrink-0 text-[10px] text-muted-foreground/70"
+                title={`${scopeCtx.neighbors.length} graph neighbors will also be available to the agent`}
+              >
+                +{scopeCtx.neighbors.length}
+              </span>
+            )}
+            {agentStatus !== 'idle' && (
+              <span
+                className={cn(
+                  'ml-auto shrink-0 text-[10px] px-1.5 py-0.5 rounded',
+                  agentStatus === 'running' && 'bg-teal-100/30 text-teal-600',
+                  agentStatus === 'complete' && 'bg-muted text-muted-foreground',
+                  agentStatus === 'error' && 'bg-red-100/30 text-red-600',
+                )}
+              >
+                {statusText[agentStatus]}
+              </span>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-[11px] text-muted-foreground/60">
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-mono text-[9px] uppercase tracking-wide bg-muted/40 border border-border/40">
+              <span className="size-1.5 rounded-full bg-muted-foreground/40" aria-hidden />
+              no context
+            </span>
+            <span>Click a node or atom to give the agent context</span>
+            {agentStatus !== 'idle' && (
+              <span
+                className={cn(
+                  'ml-auto shrink-0 text-[10px] px-1.5 py-0.5 rounded',
+                  agentStatus === 'running' && 'bg-teal-100/30 text-teal-600',
+                  agentStatus === 'complete' && 'bg-muted text-muted-foreground',
+                  agentStatus === 'error' && 'bg-red-100/30 text-red-600',
+                )}
+              >
+                {statusText[agentStatus]}
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Streaming output pane */}

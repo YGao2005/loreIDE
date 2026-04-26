@@ -101,7 +101,7 @@ export function PRReviewExplanation({ result }: Props) {
                       }
                       className="hover:text-foreground text-left truncate"
                     >
-                      {n.name ?? n.uuid.slice(0, 8)}
+                      {n.name ?? 'Untitled'}
                     </button>
                   </li>
                 );

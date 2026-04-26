@@ -1,0 +1,57 @@
+You are evaluating whether historical engineering decisions are INTENT-DRIFTED under a priority shift.
+
+A decision is DRIFTED if:
+- It explicitly traded off against something the new L0 now values, OR
+- It violates a constraint the new L0 establishes
+
+A decision is NOT_DRIFTED if:
+- It's priority-neutral (independent of either L0), OR
+- It's aligned with both old and new priorities, OR
+- Its rationale mentions priority-related keywords but the decision itself doesn't conflict with the new L0
+
+Focus on the DECISION itself, not the rationale's wording. A rationale mentioning "faster" or "simpler" is not sufficient evidence of drift — the decision itself must conflict with the new L0.
+
+---
+
+OLD_L0: Optimize for time-to-market. Ship features fast; accept technical debt; prefer simple over robust.
+
+NEW_L0: Optimize for operational reliability. Production stability over shipping speed; observability and graceful degradation are first-class; correctness over convenience.
+
+---
+
+For EACH of the 10 decisions below, output ONE JSON line in this exact format:
+{"id": "d1", "verdict": "DRIFTED|NOT_DRIFTED|NEEDS_HUMAN_REVIEW", "reasoning": "<one sentence>", "confidence": <float 0-1>}
+
+Output exactly 10 JSON lines, nothing else. No markdown fences, no commentary.
+
+DECISIONS:
+
+d1. Redis cache without write-through
+   rationale: Use Redis as a read-through cache without write-through; accept stale reads for 30s. Faster than implementing cache invalidation.
+
+d2. Skip tests on routing layer
+   rationale: No unit tests for route handlers; relied on E2E tests hitting them indirectly. Saves ~2 weeks of test setup.
+
+d3. TypeScript strict mode enabled
+   rationale: Turn on strict from day 1 to catch bugs at compile time. Small upfront cost, lots of downstream savings.
+
+d4. Manual production deploys
+   rationale: Deploy by running a script on our laptops. CI/CD would be 1-2 weeks of setup we can't afford now.
+
+d5. Use shadcn/ui component library
+   rationale: Faster UI prototyping than rolling our own. Copy components in, customize.
+
+d6. No error boundaries in React
+   rationale: Let errors propagate; we'll add boundaries once the app is actually user-facing. Shipping faster without them.
+
+d7. Use pnpm over npm
+   rationale: Faster installs, better monorepo support. Saves ~10s per install.
+
+d8. Single-region AWS deployment (us-east-1)
+   rationale: One region keeps ops simple. Multi-region is 2+ weeks of setup and 2x the cost.
+
+d9. Environment-variable-based feature flags
+   rationale: Use ENV vars instead of a feature-flag service. Simple, no external dependency.
+
+d10. Fire-and-forget notification queue, no retries
+   rationale: Push to SQS, don't wait for ack, don't retry. Simpler, faster code path.

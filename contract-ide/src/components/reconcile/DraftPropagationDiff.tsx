@@ -11,6 +11,7 @@
 
 import { useState } from 'react';
 import type { DraftPropagationContext } from '@/ipc/reconcile';
+import { useGraphStore } from '@/store/graph';
 
 interface Props {
   context: DraftPropagationContext;
@@ -51,6 +52,9 @@ Write only the new contract body in a fenced code block. Do not modify cited chi
 export default function DraftPropagationDiff({ context, upstreamUuid, onBack }: Props) {
   const [copied, setCopied] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set());
+  const nodes = useGraphStore((s) => s.nodes);
+  const nameForChild = (childUuid: string) =>
+    nodes.find((n) => n.uuid === childUuid)?.name ?? 'Untitled child';
 
   const prompt = buildPropagationPrompt(upstreamUuid, context);
 
@@ -92,11 +96,12 @@ export default function DraftPropagationDiff({ context, upstreamUuid, onBack }: 
               <div key={i} className="border rounded">
                 <button
                   type="button"
-                  className="w-full text-left px-2 py-1.5 text-xs font-mono hover:bg-muted flex items-center justify-between"
+                  className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted flex items-center justify-between"
                   onClick={() => toggleSection(i)}
                 >
                   <span className="truncate">
-                    {s.child_uuid.slice(0, 8)} :: {s.section_name}
+                    <span className="font-medium">{nameForChild(s.child_uuid)}</span>
+                    <span className="text-muted-foreground"> · {s.section_name}</span>
                   </span>
                   <span className="text-muted-foreground ml-2">
                     {expandedSections.has(i) ? '▲' : '▼'}

@@ -32,11 +32,11 @@ describe('ScreenCard registration', () => {
   it('preserves plan 13-04 serviceCard entry alongside the new screenCard', () => {
     // Wave 2 serialization_hint: nodeTypes.ts edits run sequentially —
     // 13-04 lands serviceCard, 13-05 appends screenCard. Neither plan's
-    // entry should overwrite the other.
+    // entry should overwrite the other. The legacy `contract` / `group`
+    // entries were removed when GraphCanvasInner collapsed to always render
+    // FlowChainLayout (no more abstract-graph emitters).
     expect(nodeTypes).toHaveProperty('screenCard');
     expect(nodeTypes).toHaveProperty('serviceCard');
-    expect(nodeTypes).toHaveProperty('contract');
-    expect(nodeTypes).toHaveProperty('group');
   });
 
   it('exposes a memoised React component (not the raw function)', () => {

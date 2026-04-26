@@ -1,0 +1,128 @@
+[
+  {
+    "id": "c1-tailwind-v4-import-order",
+    "type": "constraint",
+    "text": "In Tailwind v4 CSS files, local `@import` directives must come before `@import \"tailwindcss\"`.",
+    "scope": "task-pattern:css-work",
+    "applies_when": "when adding or editing any CSS file in this project (Tailwind v4 is the styling system)",
+    "source": {
+      "kind": "session",
+      "session_id": "5f44f5af-7a03-4baf-ac3c-d01ce89aba67",
+      "turn_ref": "L166,L230",
+      "quote": "Tailwind v4 requires raw imports before `@import \"tailwindcss\"`.",
+      "actor": "claude"
+    },
+    "confidence": "explicit",
+    "valid_at": "2026-04-23T13:55:00Z",
+    "invalid_at": null,
+    "superseded_by": null
+  },
+  {
+    "id": "c2-rust-tauri-path-canonicalize",
+    "type": "constraint",
+    "text": "Rust Tauri commands that accept a file path from JS must canonicalize it and assert the target sits under the current RepoState root.",
+    "scope": "module:src-tauri/**/*.rs",
+    "applies_when": "when writing a Rust Tauri command that takes a path argument from the JS side",
+    "source": {
+      "kind": "session",
+      "session_id": "5f44f5af-7a03-4baf-ac3c-d01ce89aba67",
+      "turn_ref": "L160-162,L221-222",
+      "quote": "`read_file_content` accepts any absolute path with no validation. ... Fix: Canonicalize and assert under current `RepoState` root.",
+      "actor": "claude"
+    },
+    "confidence": "explicit",
+    "valid_at": "2026-04-23T13:55:00Z",
+    "invalid_at": null,
+    "superseded_by": null
+  },
+  {
+    "id": "c3-monaco-useeffect-not-onmount",
+    "type": "constraint",
+    "text": "Monaco `setHiddenAreas` and decoration setup must run in a `useEffect` keyed on `[monaco, content]`, never in `onMount` — `useMonaco()` can be null on first render during fast tab switches.",
+    "scope": "task-pattern:monaco-editor-integration",
+    "applies_when": "when integrating or modifying a Monaco editor component (hidden areas, decorations, range scoping)",
+    "source": {
+      "kind": "session",
+      "session_id": "5f44f5af-7a03-4baf-ac3c-d01ce89aba67",
+      "turn_ref": "L201,L228-229",
+      "quote": "Moved `setHiddenAreas` + decorations out of `onMount` into a `useEffect` keyed on `[monaco, content]` so it re-runs when `useMonaco()` transitions null → defined",
+      "actor": "claude"
+    },
+    "confidence": "explicit",
+    "valid_at": "2026-04-23T13:55:00Z",
+    "invalid_at": null,
+    "superseded_by": null
+  },
+  {
+    "id": "c4-contract-save-merge-preserve",
+    "type": "constraint",
+    "text": "`saveContract` (and any caller of `write_contract`) must first read the existing sidecar and preserve `neighbors`, `format_version`, and `derived_at` on merge — `write_contract` is an OVERWRITE and silently wipes graph edges otherwise.",
+    "scope": "module:contract-persistence",
+    "applies_when": "when writing code that persists a contract sidecar, saves an inspector edit, or calls write_contract / upsert_node_pub",
+    "source": {
+      "kind": "session",
+      "session_id": "5f44f5af-7a03-4baf-ac3c-d01ce89aba67",
+      "turn_ref": "L156-158,L217-219",
+      "quote": "`write_contract` is an OVERWRITE, and `upsert_node_pub` runs `DELETE FROM edges WHERE source_uuid = ?1` before re-inserting from `fm.neighbors`. Every inspector save will silently strip neighbors from disk AND wipe outgoing edges.",
+      "actor": "claude"
+    },
+    "confidence": "explicit",
+    "valid_at": "2026-04-23T13:55:00Z",
+    "invalid_at": null,
+    "superseded_by": null
+  },
+  {
+    "id": "c5-avoid-shadcn-tabs",
+    "type": "constraint",
+    "text": "Use a plain button tab strip for tabbed UIs — do not use shadcn-Tabs.",
+    "scope": "task-pattern:tab-ui",
+    "applies_when": "when building any tab-style UI component (switcher, panel tabs, inspector tabs)",
+    "source": {
+      "kind": "session",
+      "session_id": "5f44f5af-7a03-4baf-ac3c-d01ce89aba67",
+      "turn_ref": "L173",
+      "quote": "shadcn-Tabs avoidance correct (button tab strip is the right call)",
+      "actor": "claude"
+    },
+    "confidence": "explicit",
+    "valid_at": "2026-04-23T13:55:00Z",
+    "invalid_at": null,
+    "superseded_by": null
+  },
+  {
+    "id": "c6-react-ref-click-callback",
+    "type": "constraint",
+    "text": "React click callbacks that reference mutable arrays or state must read `.current` from a ref inside the handler, not close over mount-time values — otherwise expand/collapse handles fire against stale closures.",
+    "scope": "task-pattern:react-event-handlers",
+    "applies_when": "when writing a React click/event handler that interacts with a mutable array or list state (add/remove/expand)",
+    "source": {
+      "kind": "session",
+      "session_id": "5f44f5af-7a03-4baf-ac3c-d01ce89aba67",
+      "turn_ref": "L168,L233-235",
+      "quote": "Click callbacks read `hiddenAreasRef.current` every click (not the frozen mount-time array); mutate the ref after each expand",
+      "actor": "claude"
+    },
+    "confidence": "explicit",
+    "valid_at": "2026-04-23T13:55:00Z",
+    "invalid_at": null,
+    "superseded_by": null
+  },
+  {
+    "id": "c7-editor-spawn-lookup-table",
+    "type": "constraint",
+    "text": "When spawning `$EDITOR` to open a file at a line, use a lookup table per editor: VS Code family `--goto path:line`; subl/zed/mate/atom `path:line`; vim/nvim/mvim/gvim/nvr `+line path`; emacs `+line path`; helix `path:line`; unknown → fall through to `open`.",
+    "scope": "module:editor-spawning",
+    "applies_when": "when writing code that opens a file at a specific line in the user's preferred editor",
+    "source": {
+      "kind": "session",
+      "session_id": "5f44f5af-7a03-4baf-ac3c-d01ce89aba67",
+      "turn_ref": "L167,L224-226",
+      "quote": "editor_args() table handling VS Code family (`--goto path:line`), subl/zed/mate/atom (`path:line`), vim/nvim/mvim/gvim/nvr (`+line path`), emacs (`+line path`), helix (`path:line`)",
+      "actor": "claude"
+    },
+    "confidence": "explicit",
+    "valid_at": "2026-04-23T13:55:00Z",
+    "invalid_at": null,
+    "superseded_by": null
+  }
+]

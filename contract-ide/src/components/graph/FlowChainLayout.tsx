@@ -79,13 +79,46 @@ export function FlowChainLayout() {
   // Empty state — decoupled from the react-flow canvas so users see a clear
   // signal when their click landed but the contract is missing or empty.
   if (!flowContract || memberUuids.length === 0) {
+    // Diagnostic: when selectedFlowUuid is set but the contract isn't in the
+    // loaded node set, the sidebar is showing flows from `get_sidebar_tree`
+    // (walks .contracts/ on disk) while the canvas reads `useGraphStore.nodes`
+    // (lens-aware SQLite fetch). A mismatch usually means the lens filtered
+    // the flow out, or the initial scan hasn't completed. Surface both sides
+    // so the user can see which.
+    if (selectedFlowUuid && !flowContract) {
+      console.warn(
+        '[FlowChainLayout] selectedFlowUuid set but flow contract missing from useGraphStore.nodes',
+        {
+          selectedFlowUuid,
+          loadedNodeCount: allNodes.length,
+          loadedFlowUuids: allNodes.filter((n) => n.kind === 'flow').map((n) => n.uuid),
+          firstFewNodeUuids: allNodes.slice(0, 5).map((n) => n.uuid),
+        },
+      );
+    }
     return (
-      <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-        {!selectedFlowUuid
-          ? 'Select a flow from the sidebar to view its participant chain.'
-          : !flowContract
-            ? 'Loading flow contract…'
-            : 'This flow has no members yet (Phase 9 FLOW-01 not populated on this repo).'}
+      <div className="flex h-full w-full items-center justify-center px-6">
+        <div className="max-w-md text-center text-sm text-muted-foreground space-y-2">
+          {!selectedFlowUuid && (
+            <p>Select a flow from the sidebar to view its participant chain.</p>
+          )}
+          {selectedFlowUuid && !flowContract && (
+            <>
+              <p>Flow contract not found in loaded set.</p>
+              <p className="font-mono text-[10px] break-all opacity-70">
+                {selectedFlowUuid}
+              </p>
+              <p className="text-[11px] opacity-70">
+                {allNodes.length === 0
+                  ? 'No contracts loaded yet — open a repo or wait for the initial scan.'
+                  : `${allNodes.length} contracts loaded, but none match this uuid. Lens filter may be excluding it.`}
+              </p>
+            </>
+          )}
+          {selectedFlowUuid && flowContract && memberUuids.length === 0 && (
+            <p>This flow has no members yet (Phase 9 FLOW-01 not populated on this repo).</p>
+          )}
+        </div>
       </div>
     );
   }

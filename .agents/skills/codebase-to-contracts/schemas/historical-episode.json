@@ -1,0 +1,110 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "historical-episode.json",
+  "title": "HistoricalEpisode",
+  "description": "Synthetic episode payload produced by Stage 0.5 (ingest-history.mjs) and consumed by the historical distiller adapter (contract-ide/src-tauri/src/distiller/historical.rs). One episode per discovered artifact (CLAUDE.md file, single commit, single ADR, single CHANGELOG entry). Distinct shape from session episodes — no turn refs, no actor attribution; provenance carries the artifact's file path / commit SHA so substrate_nodes get anchored to a stable source identity for re-runs and supersession.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifact_type",
+    "content_text",
+    "content_hash",
+    "provenance"
+  ],
+  "properties": {
+    "artifact_type": {
+      "type": "string",
+      "enum": [
+        "claude_md",
+        "commit",
+        "adr",
+        "changelog",
+        "decisions_md"
+      ],
+      "description": "Drives which extraction-rule branch the distiller prompt applies. Must match one of the 5 supported artifact types."
+    },
+    "content_text": {
+      "type": "string",
+      "minLength": 20,
+      "description": "The artifact's verbatim text. For commits: subject + '\\n\\n' + body. For files (CLAUDE.md / ADR / CHANGELOG / DECISIONS.md): full file contents OR a single section if the file is long enough to warrant chunking. minLength 20 prevents distillation of empty / trivial inputs at the schema layer."
+    },
+    "content_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "sha256(content_text) hex-encoded. Drives Stage 0.5 hash-skip — re-runs of ingest-history.mjs check this against existing .staging/historical-episodes.jsonl entries to skip already-distilled artifacts."
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "repo_path"
+      ],
+      "properties": {
+        "source": {
+          "const": "historical",
+          "description": "Discriminator separating synthetic-episode flow from live-session episode flow. The Rust adapter (distiller/historical.rs) keys off this value when persisting to substrate_nodes."
+        },
+        "repo_path": {
+          "type": "string",
+          "description": "Absolute path to the target repo's root. Persisted into substrate_node provenance so retrieval can scope to the originating repo."
+        },
+        "file_path": {
+          "type": "string",
+          "description": "For artifact_types claude_md / adr / changelog / decisions_md: repo-relative path of the source file. ABSENT for commits."
+        },
+        "commit_sha": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{7,40}$",
+          "description": "For artifact_type=commit: the commit SHA (full or short). ABSENT for file-based artifacts."
+        },
+        "commit_subject": {
+          "type": "string",
+          "description": "For artifact_type=commit: the commit subject line, used to render substrate_node.source_quote when LLM output omits a quote."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp of the artifact (commit author date for commits; file mtime or first-seen date for files). Used for ordering when multiple artifacts produce conflicting decisions — most-recent-wins fallback in supersession."
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "artifact_type": "claude_md",
+      "content_text": "## Decisions\n\n- Soft-delete for notes, hard-delete for users with Stripe customer archive (not delete) for tax record retention.\n- Stripe webhook idempotency via event.id — every webhook handler upserts on (event_id, processed_at).\n- Resend for transactional, no marketing list yet — welcome email on signup is the only template.",
+      "content_hash": "a3b1c9d4e7f2864152d8c4a7e1f3b9d6c5e8f7a2b3d1c4e9f6a7b8c5d2e3f1a4",
+      "provenance": {
+        "source": "historical",
+        "repo_path": "/Users/yang/lahacks/bootstrap-demo-target",
+        "file_path": "CLAUDE.md",
+        "timestamp": "2026-04-12T10:00:00Z"
+      }
+    },
+    {
+      "artifact_type": "commit",
+      "content_text": "feat: argon2 sessions + login/signup/logout (lucia v3 is eol)\n\nLucia v3 hit EOL and the @lucia-auth/adapter-prisma peer-deps block Prisma 7. Rolled argon2id sessions in-house — same surface as Lucia (login/signup/logout + getSession), ~80 lines in src/lib/auth.ts. Trade-off accepted: we maintain the password hashing + session table directly, but unblock Prisma 7 today.",
+      "content_hash": "b4c2d8e1f3a96574e2c5d8b1a4f7c3e9f6b2d5a8c7e1f4b9a3c6e8d2f5b7c1a3",
+      "provenance": {
+        "source": "historical",
+        "repo_path": "/Users/yang/lahacks/bootstrap-demo-target",
+        "commit_sha": "0c07108",
+        "commit_subject": "feat: argon2 sessions + login/signup/logout (lucia v3 is eol)",
+        "timestamp": "2026-04-08T14:23:11Z"
+      }
+    },
+    {
+      "artifact_type": "commit",
+      "content_text": "chore: bump deps to latest minor versions\n\nRoutine maintenance.",
+      "content_hash": "c5d3e9f2a17a8463f3d6e9c2b5a8d4f6c1b9e3d7f5a2c8e4b7d1f6a9c3e8d2b5",
+      "provenance": {
+        "source": "historical",
+        "repo_path": "/Users/yang/lahacks/bootstrap-demo-target",
+        "commit_sha": "abc1234",
+        "commit_subject": "chore: bump deps to latest minor versions",
+        "timestamp": "2026-04-20T09:00:00Z"
+      }
+    }
+  ]
+}

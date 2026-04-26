@@ -159,9 +159,11 @@ describe('nodeTypes registration', () => {
     expect(nodeTypes.serviceCard).toBe(ServiceCard);
   });
 
-  it('existing node types (contract, group) are preserved', () => {
-    expect(nodeTypes.contract).toBeDefined();
-    expect(nodeTypes.group).toBeDefined();
+  it('screenCard is registered alongside serviceCard', () => {
+    // Legacy `contract` / `group` types were removed when GraphCanvasInner's
+    // dispatch was collapsed to always render FlowChainLayout — the only
+    // emitters of those node types lived in the old grouped-graph path.
+    expect(nodeTypes.screenCard).toBeDefined();
   });
 });
 

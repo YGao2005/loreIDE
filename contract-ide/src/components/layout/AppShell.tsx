@@ -42,6 +42,7 @@ import { DemoOrchestrationPanel } from '@/components/dev/DemoOrchestrationPanel'
 import '@/lib/demoOrchestration';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useResetHotkey } from '@/hooks/useResetHotkey';
+import { useScreenViewerHotkeys } from '@/hooks/useScreenViewerHotkeys';
 
 /**
  * IDE shell layout.
@@ -82,6 +83,8 @@ export function AppShell() {
   // Gap-closure: Cmd+Shift+R → reset_demo_state Tauri command. Pure
   // stagecraft hotkey for multi-take filming; never leaves the IDE window.
   useResetHotkey();
+  // Phase 13 Plan 12: ⌘. (expand screen), ⌘⇧C (toggle inspect), Esc (layered exit).
+  useScreenViewerHotkeys();
 
   // Phase 9 Plan 09-02: mass-edit trigger open state.
   // CommandPalette's "Mass edit by intent…" action flips this to true;
@@ -418,12 +421,17 @@ export function AppShell() {
 
   // Auto-collapse the Inspector when no node is selected; auto-expand on
   // selection. Users can still drag the handle to override either state.
+  // resize() arg MUST be a "%"-suffixed string — a bare number is interpreted
+  // as pixels, which falls below minSize="12%" and re-triggers auto-collapse.
   const selectedNodeUuid = useGraphStore((s) => s.selectedNodeUuid);
   useEffect(() => {
     const panel = inspectorPanelRef.current;
     if (!panel) return;
     if (selectedNodeUuid) {
-      panel.resize?.(50);
+      if (panel.isCollapsed?.()) {
+        panel.expand?.();
+        panel.resize?.('50%');
+      }
     } else {
       panel.collapse?.();
     }

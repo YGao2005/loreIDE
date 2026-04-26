@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "distiller-output.json",
+  "title": "DistillerOutput",
+  "description": "JSON Schema for the LLM-emitted output of the substrate-node distiller. MUST stay byte-equivalent to substrate_node_schema() in contract-ide/src-tauri/src/distiller/prompt.rs — the Rust pipeline and the JS-side bootstrap pipeline (Stage 0.5 ingest-history.mjs) both pass this exact shape to claude -p --json-schema. Any drift between this file and the Rust source breaks distiller-output parity across the two call sites and produces substrate nodes that fail Rust deserialization (DistillerOutput::from_value).",
+  "type": "object",
+  "required": ["nodes"],
+  "properties": {
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "text", "applies_when", "source", "confidence"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["constraint", "decision", "open_question", "resolved_question", "attempt"]
+          },
+          "text": { "type": "string", "minLength": 1 },
+          "scope": { "type": ["string", "null"] },
+          "applies_when": { "type": "string", "minLength": 1 },
+          "source": {
+            "type": "object",
+            "required": ["quote", "actor"],
+            "properties": {
+              "quote": { "type": "string", "minLength": 1 },
+              "actor": {
+                "type": "string",
+                "enum": ["user", "claude", "derived"]
+              }
+            }
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["explicit", "inferred"]
+          },
+          "anchored_atom_uuids": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

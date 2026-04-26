@@ -1,0 +1,97 @@
+{
+  "scenario": "A web-app startup's L0 priority shifts at month 18.",
+  "old_L0": {
+    "id": "l0-v1",
+    "text": "Optimize for time-to-market. Ship features fast; accept technical debt; prefer simple over robust.",
+    "valid_from": "2024-01-01",
+    "valid_until": "2025-07-01"
+  },
+  "new_L0": {
+    "id": "l0-v2",
+    "text": "Optimize for operational reliability. Production stability over shipping speed; observability and graceful degradation are first-class; correctness over convenience.",
+    "valid_from": "2025-07-01",
+    "valid_until": null
+  },
+  "decisions": [
+    {
+      "id": "d1",
+      "title": "Redis cache without write-through",
+      "rationale": "Use Redis as a read-through cache without write-through; accept stale reads for 30s. Faster than implementing cache invalidation.",
+      "under_L0": "l0-v1",
+      "ground_truth_flagged": true,
+      "ground_truth_reason": "Explicitly trades correctness for speed. Under reliability priority, stale reads for 30s is a debt."
+    },
+    {
+      "id": "d2",
+      "title": "Skip tests on routing layer",
+      "rationale": "No unit tests for route handlers; relied on E2E tests hitting them indirectly. Saves ~2 weeks of test setup.",
+      "under_L0": "l0-v1",
+      "ground_truth_flagged": true,
+      "ground_truth_reason": "Directly violates reliability priority. Untested code paths."
+    },
+    {
+      "id": "d3",
+      "title": "TypeScript strict mode enabled",
+      "rationale": "Turn on strict from day 1 to catch bugs at compile time. Small upfront cost, lots of downstream savings.",
+      "under_L0": "l0-v1",
+      "ground_truth_flagged": false,
+      "ground_truth_reason": "Aligned with both priorities — strict mode helps speed AND correctness."
+    },
+    {
+      "id": "d4",
+      "title": "Manual production deploys",
+      "rationale": "Deploy by running a script on our laptops. CI/CD would be 1-2 weeks of setup we can't afford now.",
+      "under_L0": "l0-v1",
+      "ground_truth_flagged": true,
+      "ground_truth_reason": "Manual deploys are incompatible with reliability (no rollback, no audit, bus-factor 1)."
+    },
+    {
+      "id": "d5",
+      "title": "Use shadcn/ui component library",
+      "rationale": "Faster UI prototyping than rolling our own. Copy components in, customize.",
+      "under_L0": "l0-v1",
+      "ground_truth_flagged": false,
+      "ground_truth_reason": "Neutral w.r.t. priority. Component library choice doesn't affect reliability."
+    },
+    {
+      "id": "d6",
+      "title": "No error boundaries in React",
+      "rationale": "Let errors propagate; we'll add boundaries once the app is actually user-facing. Shipping faster without them.",
+      "under_L0": "l0-v1",
+      "ground_truth_flagged": true,
+      "ground_truth_reason": "Violates graceful-degradation requirement of new priority."
+    },
+    {
+      "id": "d7",
+      "title": "Use pnpm over npm",
+      "rationale": "Faster installs, better monorepo support. Saves ~10s per `install`.",
+      "under_L0": "l0-v1",
+      "ground_truth_flagged": false,
+      "ground_truth_reason": "Rationale mentions speed but the decision itself is priority-neutral. Edge case — LLM may over-flag on keyword match."
+    },
+    {
+      "id": "d8",
+      "title": "Single-region AWS deployment (us-east-1)",
+      "rationale": "One region keeps ops simple. Multi-region is 2+ weeks of setup and 2x the cost.",
+      "under_L0": "l0-v1",
+      "ground_truth_flagged": true,
+      "ground_truth_reason": "Single region violates availability requirement of reliability priority."
+    },
+    {
+      "id": "d9",
+      "title": "Environment-variable-based feature flags",
+      "rationale": "Use ENV vars instead of a feature-flag service. Simple, no external dependency.",
+      "under_L0": "l0-v1",
+      "ground_truth_flagged": false,
+      "ground_truth_reason": "Priority-neutral. ENV vars vs a flag service is a complexity trade, not a reliability trade."
+    },
+    {
+      "id": "d10",
+      "title": "Fire-and-forget notification queue, no retries",
+      "rationale": "Push to SQS, don't wait for ack, don't retry. Simpler, faster code path.",
+      "under_L0": "l0-v1",
+      "ground_truth_flagged": true,
+      "ground_truth_reason": "No retries means lost notifications on transient failure. Violates correctness."
+    }
+  ]
+}

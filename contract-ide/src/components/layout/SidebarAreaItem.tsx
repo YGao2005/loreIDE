@@ -24,7 +24,7 @@
  * lets us tune the 16px width / 10px text without overriding shadcn defaults.
  */
 
-import { ChevronRightIcon } from 'lucide-react';
+import { ChevronRightIcon, FolderIcon } from 'lucide-react';
 import { useDriftStore } from '@/store/drift';
 import { useRollupStore } from '@/store/rollup';
 import { useSubstrateStore } from '@/store/substrate';
@@ -69,20 +69,25 @@ export function SidebarAreaItem({ area }: AreaItemProps) {
         onClick={() => toggle(area.area)}
         aria-expanded={expanded}
         className={cn(
-          'group flex w-full items-center gap-1 rounded-md px-2 py-1 text-xs',
-          'text-foreground/85 hover:bg-muted/40 transition-colors',
+          'group flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-sm',
+          'text-foreground/90 hover:bg-muted/40 transition-colors',
         )}
       >
         <ChevronRightIcon
           className={cn(
-            'h-3 w-3 shrink-0 text-muted-foreground/70 transition-transform duration-150',
+            'h-3.5 w-3.5 shrink-0 text-muted-foreground/60 transition-transform duration-150',
             expanded && 'rotate-90',
           )}
           aria-hidden
         />
+        <FolderIcon
+          className="h-4 w-4 shrink-0 text-muted-foreground/70"
+          strokeWidth={1.5}
+          aria-hidden
+        />
         <span
           className={cn(
-            'truncate',
+            'truncate font-normal',
             isRoot && 'italic text-muted-foreground',
           )}
         >
@@ -136,6 +141,20 @@ function SidebarFlowItem({ flow }: { flow: SidebarFlow }) {
   const setSelectedFlow = useSidebarStore((s) => s.setSelectedFlow);
   const isSelected = selectedFlowUuid === flow.uuid;
 
+  // Per-flow status — drift / rollup-stale / intent-drifted. Checks the flow's
+  // own uuid plus any frontmatter member uuids so the indicator surfaces both
+  // direct drift and drift on a child the flow owns.
+  const uuidsToCheck = [flow.uuid, ...flow.member_uuids];
+  const hasDrift = useDriftStore((s) =>
+    uuidsToCheck.some((u) => s.driftedUuids.has(u)),
+  );
+  const hasRollupStale = useRollupStore((s) =>
+    uuidsToCheck.some((u) => s.rollupStaleUuids.has(u)),
+  );
+  const hasIntentDrift = useSubstrateStore((s) =>
+    uuidsToCheck.some((u) => s.nodeStates.get(u) === 'intent_drifted'),
+  );
+
   return (
     <button
       type="button"
@@ -149,13 +168,33 @@ function SidebarFlowItem({ flow }: { flow: SidebarFlow }) {
       data-flow-uuid={flow.uuid}
       data-selected={isSelected}
       className={cn(
-        'block w-full rounded px-2 py-0.5 text-left text-[11px] transition-colors',
+        'flex w-full items-center gap-1.5 rounded px-2 py-0.5 text-left text-[11px] transition-colors',
         isSelected
           ? 'bg-muted text-foreground'
           : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground',
       )}
     >
       <span className="truncate">{flow.name}</span>
+      <span className="ml-auto flex items-center gap-1">
+        {hasDrift && (
+          <span
+            title="Drifted"
+            className="h-1.5 w-1.5 rounded-full bg-red-500 ring-1 ring-red-500/40"
+          />
+        )}
+        {hasRollupStale && (
+          <span
+            title="Rollup stale"
+            className="h-1.5 w-1.5 rounded-full bg-amber-500 ring-1 ring-amber-500/40"
+          />
+        )}
+        {hasIntentDrift && (
+          <span
+            title="Intent drifted"
+            className="h-1.5 w-1.5 rounded-full bg-orange-500 ring-1 ring-orange-500/40"
+          />
+        )}
+      </span>
     </button>
   );
 }

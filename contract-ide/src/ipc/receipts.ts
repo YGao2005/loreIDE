@@ -54,7 +54,7 @@ export interface ReceiptCreatedPayload {
  * Returns the full row set from the receipts + receipt_nodes join.
  */
 export async function listReceiptsForNode(nodeUuid: string): Promise<Receipt[]> {
-  return invoke<Receipt[]>('list_receipts_for_node', { node_uuid: nodeUuid });
+  return invoke<Receipt[]>('list_receipts_for_node', { nodeUuid });
 }
 
 // ---------------------------------------------------------------------------

@@ -10,7 +10,7 @@
  * subscription alive across tab switches.
  */
 
-import { useReceiptsStore } from '@/store/receipts';
+import { useReceiptsStore, type Receipt } from '@/store/receipts';
 import { ReceiptCard } from './ReceiptCard';
 import type { ContractNode } from '@/ipc/types';
 
@@ -18,9 +18,11 @@ interface ReceiptHistoryTabProps {
   node: ContractNode | null;
 }
 
+const EMPTY_RECEIPTS: Receipt[] = [];
+
 export function ReceiptHistoryTab({ node }: ReceiptHistoryTabProps) {
   const receipts = useReceiptsStore((s) =>
-    node?.uuid ? (s.byNode.get(node.uuid) ?? []) : [],
+    node?.uuid ? (s.byNode.get(node.uuid) ?? EMPTY_RECEIPTS) : EMPTY_RECEIPTS,
   );
   const pinned = useReceiptsStore((s) => s.pinned);
   const pinnedCount = pinned.filter(Boolean).length;

@@ -45,8 +45,29 @@ import { Command } from 'cmdk';
 import { findSubstrateByIntent, type IntentSearchHit } from '@/ipc/substrate';
 import { useGraphStore } from '@/store/graph';
 import { useSidebarStore } from '@/store/sidebar';
+import { isFlowContract, type ContractNode } from '@/ipc/types';
 import { IntentPaletteHit } from './IntentPaletteHit';
 import './commandPalette.css';
+
+/**
+ * Resolve the flow contract whose `members` array contains the given uuid.
+ * Used to land the canvas on the right L2 chain when the user lands on an
+ * L3 trigger or an L4 atom whose parent is L3.
+ *
+ * Linear scan over `allNodes` is fine for hackathon scale (~500 nodes); the
+ * canvas already does similar O(n) work per render.
+ */
+function findOwningFlow(
+  targetUuid: string | null,
+  allNodes: ContractNode[],
+): ContractNode | null {
+  if (!targetUuid) return null;
+  return (
+    allNodes.find(
+      (n) => isFlowContract(n) && n.members.includes(targetUuid),
+    ) ?? null
+  );
+}
 
 /**
  * Debounce window (ms) between the last keystroke and IPC dispatch. Picked
@@ -171,11 +192,16 @@ export function IntentPalette() {
       }
 
       if (hit.kind === 'contract' && hit.level === 'L4') {
-        // L4 atom → land at parent's L3 trigger view, focus the atom chip.
-        // setFocusedAtomUuid is consumed by plan 13-05 ScreenCard for halo;
-        // pushParent drives the canvas to render the parent surface. If
-        // parent_uuid is null (orphan atom — defensive, shouldn't happen in
-        // practice), we still focus the atom so the Inspector can show it.
+        // L4 atom → resolve the owning flow (parent_uuid is the L3, find the
+        // flow whose `members` includes that L3) so the canvas swaps to the
+        // L2 vertical chain with the atom chip focused. Without setSelectedFlow
+        // the canvas would fall through to the empty-state "Select a flow"
+        // message — the new design has no abstract-graph fallback.
+        const allNodes = useGraphStore.getState().nodes;
+        const owningFlow = findOwningFlow(hit.parent_uuid, allNodes);
+        if (owningFlow) {
+          useSidebarStore.getState().setSelectedFlow(owningFlow.uuid);
+        }
         if (hit.parent_uuid) {
           useGraphStore.getState().pushParent(hit.parent_uuid);
         }
@@ -184,8 +210,18 @@ export function IntentPalette() {
       }
 
       if (hit.kind === 'contract') {
-        // L0–L3 non-flow contract → push it onto the parent stack so the
-        // canvas drills into its child surface.
+        // L0–L3 non-flow contract. For L3 triggers, resolve the owning flow
+        // so the canvas lands on its chain (L3 IS the trigger card at the top
+        // of the chain). L0/L1/L2 don't have an owning flow at this layer
+        // (L2 contracts ARE flows when kind:'flow'; L0/L1 are sidebar-only)
+        // so they only update the parent stack for Breadcrumb display.
+        if (hit.level === 'L3') {
+          const allNodes = useGraphStore.getState().nodes;
+          const owningFlow = findOwningFlow(hit.uuid, allNodes);
+          if (owningFlow) {
+            useSidebarStore.getState().setSelectedFlow(owningFlow.uuid);
+          }
+        }
         useGraphStore.getState().pushParent(hit.uuid);
         return;
       }

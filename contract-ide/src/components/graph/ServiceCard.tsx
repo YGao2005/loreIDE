@@ -64,6 +64,7 @@ import { useDriftStore } from '@/store/drift';
 import { useRollupStore } from '@/store/rollup';
 import { useSubstrateStore } from '@/store/substrate';
 import { useCitationStore } from '@/store/citation';
+import { ChatScopeBadge } from './ChatScopeBadge';
 
 export type ServiceCardKind =
   | 'api'
@@ -148,6 +149,7 @@ function CardHeader({ data }: { data: ServiceCardData }) {
   return (
     <header className="flex items-center gap-2 px-3 py-2 border-b border-border/40 min-w-0">
       <KindIcon kind={data.kind} />
+      <ChatScopeBadge uuid={data.uuid} variant="card" />
       {data.kind === 'api' && data.method && data.path && (
         <>
           <span className={methodBadgeStyles({ method: data.method })}>

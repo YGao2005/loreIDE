@@ -11,6 +11,7 @@
  */
 
 import type { ChildSectionDiff } from '@/ipc/reconcile';
+import { useGraphStore } from '@/store/graph';
 
 interface Props {
   diffs: ChildSectionDiff[];
@@ -18,6 +19,9 @@ interface Props {
 }
 
 export default function ChildrenChangesView({ diffs, onBack }: Props) {
+  const nodes = useGraphStore((s) => s.nodes);
+  const nameForChild = (childUuid: string) =>
+    nodes.find((n) => n.uuid === childUuid)?.name ?? 'Untitled child';
   if (diffs.length === 0) {
     return (
       <div className="flex flex-col gap-3 text-sm">
@@ -63,8 +67,9 @@ export default function ChildrenChangesView({ diffs, onBack }: Props) {
           <div key={i} className="border rounded">
             {/* Header */}
             <div className="flex items-center justify-between px-2 py-1.5 border-b bg-muted/40">
-              <span className="font-mono text-xs truncate">
-                {d.child_uuid.slice(0, 8)} :: {d.section_name}
+              <span className="text-xs truncate">
+                <span className="font-medium">{nameForChild(d.child_uuid)}</span>
+                <span className="text-muted-foreground"> · {d.section_name}</span>
               </span>
               {d.drifted && (
                 <span className="ml-2 text-xs text-amber-500 shrink-0">drifted</span>

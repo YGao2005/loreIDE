@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Constraint",
+  "type": "object",
+  "required": ["id", "text", "scope", "applies_when", "source", "confidence", "valid_at"],
+  "properties": {
+    "id": { "type": "string", "description": "uuid" },
+    "type": { "const": "constraint" },
+    "text": {
+      "type": "string",
+      "description": "Imperative statement of the rule, e.g. 'use tailwind for styling'. One sentence."
+    },
+    "scope": {
+      "type": "string",
+      "description": "'global' | 'module:<path-pattern>' | 'task-pattern:<short-description>'"
+    },
+    "applies_when": {
+      "type": "string",
+      "description": "Semantic trigger — when this constraint should fire for a goal. E.g. 'when writing a Rust Tauri command that accepts a path from JS'. This is the field retrieval matches against."
+    },
+    "source": {
+      "type": "object",
+      "required": ["kind", "actor"],
+      "properties": {
+        "kind": { "enum": ["session", "code-derived"] },
+        "session_id": { "type": "string" },
+        "turn_ref": { "type": "string", "description": "line or turn pointer in the filtered transcript" },
+        "quote": { "type": "string", "description": "verbatim quote justifying the constraint" },
+        "actor": { "enum": ["user", "claude", "derived"] }
+      }
+    },
+    "confidence": {
+      "enum": ["explicit", "inferred"],
+      "description": "explicit = stated as a rule; inferred = surfaced from context/behavior"
+    },
+    "valid_at": { "type": "string", "format": "date-time" },
+    "invalid_at": { "type": ["string", "null"], "format": "date-time" },
+    "superseded_by": { "type": ["string", "null"], "description": "id of superseding constraint" }
+  }
+}

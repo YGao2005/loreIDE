@@ -92,6 +92,11 @@
       "description": "ISO 8601 timestamp of last Phase 6 derivation. null at bootstrap.",
       "type": ["string", "null"]
     },
+    "name": {
+      "description": "Optional author-supplied display name. When present, takes precedence over scanner-side derivation (route → first-sentence intent → file basename → 'untitled-<uuid>'). Bootstrap pipelines should emit a non-empty name when classify can produce one; absent (omitted entirely) is preferred over empty string.",
+      "type": ["string", "null"],
+      "minLength": 1
+    },
     "section_hashes": {
       "description": "Per-section SHA-256 hashes (lowercased H2 names). Empty {} at bootstrap; Phase 8 lazy-migrates on first write.",
       "type": "object",

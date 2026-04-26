@@ -1,5 +1,6 @@
 import { GraphCanvasInner } from './GraphCanvasInner';
 import { Breadcrumb } from './Breadcrumb';
+import { ScreenViewerOverlay } from './ScreenViewerOverlay';
 
 /**
  * Public mount point for the contract graph canvas (Phase 3 / GRAPH-01).
@@ -14,14 +15,20 @@ import { Breadcrumb } from './Breadcrumb';
  * filling the remaining space. Both children rely on the AppShell-level
  * <ReactFlowProvider> being in scope; if you see "ReactFlowProvider missing"
  * crashes on boot, the provider was removed from AppShell.
+ *
+ * The wrapper is `relative` so ScreenViewerOverlay (Phase 13 Plan 12) can use
+ * `absolute inset-0` to cover only the Graph area when the user expands a
+ * ScreenCard via ⤢ — Sidebar, bottom Inspector, and Chat panel remain visible
+ * and interactive.
  */
 export function GraphCanvas() {
   return (
-    <div className="flex flex-col h-full w-full">
+    <div className="relative flex flex-col h-full w-full">
       <Breadcrumb />
       <div className="flex-1 min-h-0">
         <GraphCanvasInner />
       </div>
+      <ScreenViewerOverlay />
     </div>
   );
 }

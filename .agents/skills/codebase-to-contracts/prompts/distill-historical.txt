@@ -1,0 +1,147 @@
+You are extracting reusable SUBSTRATE NODES from a HISTORICAL ARTIFACT in a software-development codebase — NOT a conversation transcript.
+
+A historical artifact is one of: a CLAUDE.md / DECISIONS.md note, a single git commit message (subject + body), an ADR document, or a CHANGELOG entry. These are written-once decision records, not dialogue. Apply the per-artifact-type rules below — extraction calibration differs significantly from session-transcript distillation.
+
+A substrate node is a typed observation that should guide future work on this codebase. Substrate nodes are reusable — they save time or prevent bugs if automatically surfaced to a future agent on a relevant task.
+
+## Five node types (identical to session distillation — schema parity required)
+
+- **constraint**: A rule that must hold (e.g., "Always canonicalize file paths from JS in Rust commands")
+- **decision**: A choice the team made and committed to (e.g., "Use soft-delete with 30-day grace for accounts")
+- **open_question**: A question raised but not resolved in the artifact
+- **resolved_question**: A question raised AND answered within the same artifact
+- **attempt**: A pattern that was tried but didn't fully work — useful as a "don't repeat this exactly" signal
+
+## Per-artifact-type extraction rules
+
+The artifact's type is provided in the user prompt as `artifact_type: <type>`. Apply the matching rules:
+
+### CLAUDE.md / DECISIONS.md
+
+These files are typically dense — every paragraph or bullet is a candidate node.
+
+- Bullets under a "Decisions" or "Conventions" heading → ONE `decision` or `constraint` node each. "Conventions" content (style, naming, project-wide rules) prefers `constraint`. "Decisions" content (architectural choices made and committed to) prefers `decision`.
+- Bullets under "Open questions" or "Unresolved" → `open_question` nodes
+- Q-and-A pairs ("Q: ... A: ...") within the document → `resolved_question` nodes
+- Stack / "Tools we use" sections describing CHOICES (e.g., "Postgres over Dynamo because…") → `decision` nodes; if it's purely descriptive ("we use Tailwind"), prefer `constraint` with scope `global`
+- DO NOT extract from sections that are pure setup instructions ("run `pnpm install`"), pure architecture diagrams without rationale, or generic advice ("write tests")
+
+### commit (artifact_type: commit)
+
+The user prompt body has format `<subject>\n\n<body>` (body may be empty). Apply hard filters BEFORE extraction:
+
+- Subject prefixed `chore:` / `wip:` / `docs:` / `style:` / `test:` → emit ZERO nodes (these are housekeeping, not decisions)
+- Merge commits, version-bump commits, "fix typo" commits → emit ZERO nodes
+- Commits with empty body AND a subject under 30 characters → emit ZERO nodes (no rationale conveyed)
+
+For commits that pass the filter:
+
+- Subject + body together carry the decision. Look for explicit rationale phrases: "we chose X over Y because", "switching from", "to support", "rolling our own because", "to avoid", "to match"
+- One commit produces AT MOST one substrate node — even a sweeping refactor commit gets ONE `decision` node summarizing the choice, not five fragmented ones
+- `source.quote` MUST be a verbatim subject + relevant body sentence
+- `source.actor` is `derived` (commits aren't user/claude-attributed in this context)
+- `confidence` is `inferred` UNLESS the body explicitly enumerates a decision in declarative form (then `explicit`)
+
+### adr (artifact_type: adr — files under docs/adr/, docs/decisions/, docs/architecture/)
+
+ADRs follow a canonical structure (Context / Decision / Consequences). Extract:
+
+- The "Decision" section's first declarative sentence → ONE `decision` node, `confidence: explicit`
+- "Consequences" rarely produces additional nodes; only if a consequence reads as a separate constraint ("This means we MUST always …") → one `constraint` node
+- "Context" never produces standalone nodes — it's motivation for the decision, captured via `applies_when` and `source.quote`
+
+### changelog (artifact_type: changelog — CHANGELOG.md entries)
+
+Most changelog entries are too thin to extract from. Apply strict rules:
+
+- Only `BREAKING CHANGE:` entries that explicitly state the new behavior → one `decision` node per breaking change
+- "Deprecated:" entries that explain WHY → one `decision` node
+- "Added:" / "Fixed:" / "Changed:" without rationale → emit ZERO nodes
+- Version-header lines (`## v1.2.3 - 2026-01-15`) → emit ZERO nodes
+
+## Output schema (must match the existing substrate_nodes table — schema parity load-bearing)
+
+For each substrate node, emit ONE JSON object matching:
+
+```
+{
+  "type": "constraint" | "decision" | "open_question" | "resolved_question" | "attempt",
+  "text": "imperative or declarative statement, ONE sentence",
+  "scope": "global" | "module:<path-pattern>" | "task-pattern:<short>",
+  "applies_when": "semantic trigger for retrieval — be specific enough to avoid false positives, broad enough to catch paraphrases",
+  "source": {
+    "quote": "verbatim quote from the artifact justifying this node",
+    "actor": "derived"
+  },
+  "confidence": "explicit" | "inferred",
+  "anchored_atom_uuids": []
+}
+```
+
+Special rules for historical extraction:
+
+- `source.actor` is ALWAYS `derived` for historical artifacts. The actor field is a session-distillation primitive (user/claude/derived); historical artifacts have no live actor, so we mark them `derived` uniformly. The provenance of the artifact (file path / commit SHA) is captured in the SubstrateNode's `source_*` columns by the Rust adapter, not in this LLM output.
+- `anchored_atom_uuids` is ALWAYS an empty array `[]` for Stage 0.5. Historical-substrate-to-atom anchoring is low-confidence at bootstrap time (atoms may not even exist yet — Stage 1 hasn't run, or has run but the LLM doesn't have UUID visibility). Anchoring happens at retrieval time via the existing repo-level lineage fallback in `pipeline::distill_episode()`'s post-processing.
+- `applies_when` matters MORE than for session distillation: the artifact won't reappear, so the retrieval trigger is the only future signal. Be specific enough that a future agent on a related task will hit it. Bad: "deletion logic". Good: "implementing or reviewing user account deletion / archival / GDPR-compliant data removal flows".
+- `text` is one declarative sentence in imperative voice ("Soft-delete user accounts; archive Stripe customer instead of deleting") — NOT a paraphrase of the artifact's prose ("The codebase uses soft-delete for accounts").
+
+## Quality bar
+
+Each substrate node should answer: "Would I want this injected automatically into a future session whose goal matches `applies_when`?" If no, drop it.
+
+Prefer fewer high-quality nodes over many low-quality ones. A CLAUDE.md with 12 bullets might produce 6 substrate nodes — that's fine. A 30-commit git log might produce 3-5 nodes — that's also fine. Do not pad output to look productive.
+
+## Negative examples — these inputs MUST produce ZERO nodes
+
+### Negative example 1 — chore commit
+
+```
+artifact_type: commit
+chore: bump deps to latest minor versions
+
+Routine maintenance — no behavior changes.
+```
+
+→ Output: `{"nodes": []}`. Reason: chore prefix; body explicitly disclaims behavior change.
+
+### Negative example 2 — typo fix
+
+```
+artifact_type: commit
+docs: typo in README pricing section
+
+Fixed "perr month" to "per month".
+```
+
+→ Output: `{"nodes": []}`. Reason: docs prefix; trivial typo with no decision content.
+
+### Negative example 3 — version-bump changelog
+
+```
+artifact_type: changelog
+## v1.2.3 - 2026-01-15
+
+- Updated dependencies
+- Fixed minor styling issues
+```
+
+→ Output: `{"nodes": []}`. Reason: no breaking change; no rationale.
+
+### Negative example 4 — generic CLAUDE.md filler
+
+```
+artifact_type: claude_md
+## Setup
+
+Run `pnpm install` to install dependencies. Then run `pnpm dev` to start the dev server.
+
+## Tests
+
+We use Vitest. Write tests.
+```
+
+→ Output: `{"nodes": []}`. Reason: pure setup instructions and generic advice; no specific decisions or constraints to capture.
+
+## Output
+
+Output a single JSON object `{"nodes": [...]}` containing all substrate nodes you extracted. If no nodes meet the quality bar, output `{"nodes": []}` — empty output is correct output for thin artifacts.

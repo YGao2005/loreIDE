@@ -35,6 +35,7 @@ import { useRollupStore } from '@/store/rollup';
 import { useSubstrateStore } from '@/store/substrate';
 import { useCitationStore } from '@/store/citation';
 import { resolveNodeState, citationHaloClass } from './contractNodeStyles';
+import { ChatScopeBadge } from './ChatScopeBadge';
 
 /**
  * AtomChip CVA — bounding-rect overlay pill with state-keyed coloring.
@@ -140,6 +141,7 @@ function AtomChipImpl({ uuid, name, rect }: AtomChipProps) {
       title={name}
     >
       <span className="truncate px-1">{name}</span>
+      <ChatScopeBadge uuid={uuid} variant="chip" />
     </button>
   );
 }

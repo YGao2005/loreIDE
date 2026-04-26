@@ -16,6 +16,7 @@ import { SimplifiedInspector } from '@/components/inspector/SimplifiedInspector'
 import { DelegateButton } from '@/components/inspector/DelegateButton';
 import { SubstrateSidePanel } from '@/components/inspector/SubstrateSidePanel';
 import { SourceArchaeologyModal } from '@/components/inspector/SourceArchaeologyModal';
+import { ChatScopeBadge } from '@/components/graph/ChatScopeBadge';
 
 /**
  * Right-hand inspector panel (SHELL-01 + SHELL-05 + INSP-01 + INSP-05).
@@ -37,14 +38,8 @@ import { SourceArchaeologyModal } from '@/components/inspector/SourceArchaeology
  * (Phase 2) picks up the sidecar change and refreshes SQLite; the graph
  * re-renders automatically.
  *
- * Phase 8 Plan 08-05 (CHRY-01..03): the Inspector now renders:
- *   - CherrypickModal (Dialog overlay outside tab body)
- *   - Dev-only "Demo cherrypick" affordance in the header for end-to-end
- *     testing of the modal + atomic IPC path without waiting on 08-04
- *     patch-extraction integration.
- *
- * TODO(08-06 or Phase 9): Remove the "Demo cherrypick" button once the agent
- * loop (08-04) populates pendingPatch from real JSONL tool_use blocks.
+ * Phase 8 Plan 08-05 (CHRY-01..03): the Inspector renders CherrypickModal
+ * (Dialog overlay outside tab body) for agent-loop patch review.
  */
 type InspectorTab = 'Contract' | 'Code' | 'Preview';
 const TABS: InspectorTab[] = ['Contract', 'Code', 'Preview'];
@@ -140,47 +135,6 @@ export function Inspector() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [activeTab, selectedNode, repoPath]);
 
-  /**
-   * Phase 8 Plan 08-05 — dev-only "Demo cherrypick modal" affordance.
-   *
-   * Opens the CherrypickModal with a SYNTHETIC PendingPatch constructed from:
-   *   - The selected node's current contract body as `contractBefore`
-   *   - A synthetic "append intent stub" as `contractAfter`
-   *   - A synthetic FilePatch pointing at `code_ranges[0].file` (or a fallback)
-   *
-   * Proves the modal + DiffPane layout + single-IPC Approve path works
-   * end-to-end without waiting on Phase 8 Plan 08-04's JSONL extraction.
-   *
-   * TODO(08-06 or Phase 9): Remove this button. The agent loop (08-04) will
-   * populate useCherrypickStore.pendingPatch directly from the JSONL tool_use
-   * blocks after each agent run.
-   */
-  const handleDemoCherrypick = () => {
-    if (!selectedNode || !repoPath) return;
-
-    const contractBefore = selectedNode.contract_body ?? '(no contract body)';
-    const contractAfter = contractBefore + '\n\n## Updated by Demo\n\nThis is a synthetic patch for testing the cherrypick flow.';
-
-    const firstFile = selectedNode.code_ranges?.[0]?.file ?? 'README.md';
-
-    useCherrypickStore.getState().setPendingPatch({
-      uuid: selectedNode.uuid,
-      nodeName: selectedNode.name,
-      intentPhrase: 'synthetic demo patch',
-      toolCallCount: 3,
-      contractBefore,
-      contractAfter,
-      filePatches: [
-        {
-          file: firstFile,
-          before: '// original content (synthetic)',
-          after: '// updated content (synthetic demo cherrypick)',
-        },
-      ],
-    });
-    useCherrypickStore.getState().openModal();
-  };
-
   const pendingPatch = useCherrypickStore((s) => s.pendingPatch);
   const targetedNodeUuid = useCherrypickStore((s) => s.targetedNodeUuid);
   const isTargetedAndHasPatch =
@@ -213,6 +167,7 @@ export function Inspector() {
           <span className="text-[10px] rounded bg-muted/60 px-1.5 py-0.5 text-muted-foreground shrink-0">
             {selectedNode.kind}
           </span>
+          <ChatScopeBadge uuid={selectedNode.uuid} variant="inspector" />
           <div className="ml-auto flex items-center gap-2">
             {/* Phase 8 Plan 08-05: "Review changes" button when a patch is pending */}
             {isTargetedAndHasPatch && (
@@ -222,17 +177,6 @@ export function Inspector() {
                 className="text-[10px] px-2 py-0.5 rounded-md bg-teal-100 text-teal-800 hover:bg-teal-200 transition-colors"
               >
                 Review changes
-              </button>
-            )}
-            {/* Phase 8 Plan 08-05 DEV-ONLY: synthetic demo affordance */}
-            {selectedNode && (
-              <button
-                type="button"
-                onClick={handleDemoCherrypick}
-                className="text-[10px] px-2 py-0.5 rounded-md bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                title="Dev: open demo cherrypick modal (TODO: remove in 08-06)"
-              >
-                Demo
               </button>
             )}
             <DriftBadge

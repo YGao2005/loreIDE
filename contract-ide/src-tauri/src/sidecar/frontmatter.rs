@@ -54,6 +54,13 @@ pub struct ContractFrontmatter {
     pub route: Option<String>,
     pub derived_at: Option<String>,
 
+    /// Optional author-supplied display name. When present, takes precedence
+    /// over every scanner-side derivation. Absent on legacy sidecars; the
+    /// scanner falls back to route → first-sentence → file basename →
+    /// "untitled-<8>" (never the bare UUID).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+
     // -------------------------------------------------------------------------
     // Phase 8 propagation fields (format_version: 3).
     // These five fields appear LAST so v2-written sidecars round-trip
@@ -334,6 +341,7 @@ Second paragraph after a markdown horizontal rule — this MUST survive parsing.
             human_pinned: false,
             route: Some("/api/test".to_string()),
             derived_at: Some("2026-04-24T00:00:00Z".to_string()),
+            name: None,
             section_hashes: BTreeMap::new(),
             rollup_inputs: vec![],
             rollup_hash: None,
@@ -383,6 +391,7 @@ Second paragraph after a markdown horizontal rule — this MUST survive parsing.
             human_pinned: false,
             route: None,
             derived_at: Some("2026-04-24T00:00:00Z".to_string()),
+            name: None,
             section_hashes,
             rollup_inputs: vec![
                 RollupInput {
@@ -478,6 +487,7 @@ Second paragraph after a markdown horizontal rule — this MUST survive parsing.
             human_pinned: false,
             route: Some("/".to_string()),
             derived_at: None,
+            name: None,
             section_hashes: BTreeMap::new(),
             rollup_inputs: vec![],  // empty → skip_serializing_if
             rollup_hash: None,      // None → skip_serializing_if
@@ -535,6 +545,7 @@ Second paragraph after a markdown horizontal rule — this MUST survive parsing.
             human_pinned: false,
             route: None,
             derived_at: None,
+            name: None,
             section_hashes: BTreeMap::new(),
             rollup_inputs: vec![],
             rollup_hash: None,
@@ -580,6 +591,7 @@ Second paragraph after a markdown horizontal rule — this MUST survive parsing.
             human_pinned: false,
             route: None,
             derived_at: None,
+            name: None,
             section_hashes: BTreeMap::new(),
             rollup_inputs: vec![],
             rollup_hash: None,
@@ -612,6 +624,7 @@ Second paragraph after a markdown horizontal rule — this MUST survive parsing.
             human_pinned: false,
             route: None,
             derived_at: None,
+            name: None,
             section_hashes: BTreeMap::new(),
             rollup_inputs: vec![],
             rollup_hash: None,
@@ -643,6 +656,7 @@ Second paragraph after a markdown horizontal rule — this MUST survive parsing.
             human_pinned: false,
             route: None,
             derived_at: None,
+            name: None,
             section_hashes: BTreeMap::new(),
             rollup_inputs: vec![],
             rollup_hash: None,
@@ -663,6 +677,7 @@ Second paragraph after a markdown horizontal rule — this MUST survive parsing.
             human_pinned: false,
             route: None,
             derived_at: None,
+            name: None,
             section_hashes: BTreeMap::new(),
             rollup_inputs: vec![],
             rollup_hash: None,
@@ -697,6 +712,7 @@ Second paragraph after a markdown horizontal rule — this MUST survive parsing.
             human_pinned: false,
             route: None,
             derived_at: None,
+            name: None,
             section_hashes: BTreeMap::new(),
             rollup_inputs: vec![],
             rollup_hash: None,
@@ -717,6 +733,7 @@ Second paragraph after a markdown horizontal rule — this MUST survive parsing.
             human_pinned: false,
             route: None,
             derived_at: None,
+            name: None,
             section_hashes: BTreeMap::new(),
             rollup_inputs: vec![],
             rollup_hash: None,
@@ -737,6 +754,7 @@ Second paragraph after a markdown horizontal rule — this MUST survive parsing.
             human_pinned: false,
             route: None,
             derived_at: None,
+            name: None,
             section_hashes: BTreeMap::new(),
             rollup_inputs: vec![],
             rollup_hash: None,
@@ -778,6 +796,7 @@ Second paragraph after a markdown horizontal rule — this MUST survive parsing.
             human_pinned: false,
             route: None,
             derived_at: None,
+            name: None,
             section_hashes,
             rollup_inputs: vec![],
             rollup_hash: None,

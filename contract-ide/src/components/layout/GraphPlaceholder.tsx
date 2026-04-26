@@ -106,16 +106,12 @@ export function GraphPlaceholder() {
         empty={emptyContent}
       >
         {/* Phase 3 Plan 1: real react-flow canvas replaces the dotted L0/L1/L2/L3
-            placeholder grid. Canvas subscribes to useGraphStore.nodes directly. */}
+            placeholder grid. Canvas subscribes to useGraphStore.nodes directly.
+            Switch-Repo affordance now lives in the left sidebar next to Copy
+            Mode (see Sidebar.tsx) — keeps the canvas top free for breadcrumb. */}
         <div className="h-full w-full">
           <GraphCanvas />
         </div>
-        <button
-          onClick={handleOpenRepo}
-          className="absolute top-3 right-3 px-3 py-1.5 rounded-md border border-border/70 bg-background hover:bg-muted text-muted-foreground hover:text-foreground text-xs transition-colors"
-        >
-          Switch Repo
-        </button>
       </AsyncState>
     </div>
   );
