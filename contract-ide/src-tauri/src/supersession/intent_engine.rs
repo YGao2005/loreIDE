@@ -23,6 +23,30 @@ use crate::supersession::prompt::build_intent_drift_batch_prompt;
 use crate::supersession::types::{IntentDriftResult, ParsedVerdict, Verdict};
 use crate::supersession::verdict::parse_three_way_batch;
 use crate::supersession::walker::walk_rollup_descendants;
+
+/// Bucket a (verdict, confidence) pair lands in per the calibration spec.
+/// Confidence-floor is checked first — anything below 0.50 is `Filtered`
+/// regardless of verdict, matching the substrate_nodes write-gate. Then:
+/// `Drifted ≥ 0.85` → `AutoApplied`; `Drifted | NeedsHumanReview ≥ 0.50` →
+/// `Surfaced`; everything else (e.g., confident `NotDrifted`) → `NoAction`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum VerdictBucket {
+    AutoApplied,
+    Surfaced,
+    Filtered,
+    NoAction,
+}
+
+pub(crate) fn classify_verdict(v: Verdict, confidence: f64) -> VerdictBucket {
+    if confidence < 0.50 {
+        return VerdictBucket::Filtered;
+    }
+    match v {
+        Verdict::Drifted if confidence >= 0.85 => VerdictBucket::AutoApplied,
+        Verdict::Drifted | Verdict::NeedsHumanReview => VerdictBucket::Surfaced,
+        _ => VerdictBucket::NoAction,
+    }
+}
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
@@ -131,11 +155,11 @@ pub async fn preview_intent_drift_impact(
     let mut would_filter = 0u32;
     let mut examples = vec![];
     for (i, v) in verdicts.iter().enumerate() {
-        match v.verdict {
-            Verdict::Drifted if v.confidence >= 0.85 => would_drift += 1,
-            Verdict::Drifted | Verdict::NeedsHumanReview => would_surface += 1,
-            _ if v.confidence < 0.50 => would_filter += 1,
-            _ => {}
+        match classify_verdict(v.verdict, v.confidence) {
+            VerdictBucket::AutoApplied => would_drift += 1,
+            VerdictBucket::Surfaced => would_surface += 1,
+            VerdictBucket::Filtered => would_filter += 1,
+            VerdictBucket::NoAction => {}
         }
         if i < 3 {
             if let Some(d) = sample.get(i) {
@@ -244,23 +268,28 @@ pub async fn propagate_intent_drift(
             }
 
             result.judged += 1;
-            match parsed.verdict {
-                Verdict::Drifted if parsed.confidence >= 0.85 => result.drifted += 1,
-                Verdict::Drifted | Verdict::NeedsHumanReview => result.surfaced += 1,
-                _ if parsed.confidence < 0.50 => result.filtered += 1,
-                _ => {}
+            let bucket = classify_verdict(parsed.verdict, parsed.confidence);
+            match bucket {
+                VerdictBucket::AutoApplied => result.drifted += 1,
+                VerdictBucket::Surfaced => result.surfaced += 1,
+                VerdictBucket::Filtered => result.filtered += 1,
+                VerdictBucket::NoAction => {}
             }
-
-            let _ = app.emit(
-                "substrate:intent_drift_changed",
-                serde_json::json!({
-                    "uuid": decision.uuid,
-                    "verdict": parsed.verdict.as_db_str(),
-                    "confidence": parsed.confidence,
-                    "auto_applied": auto_applied,
-                    "priority_shift_id": priority_shift_id,
-                }),
-            );
+            // Only emit when substrate_nodes.intent_drift_state was actually written
+            // (confidence >= 0.50). Below the noise floor, DB stays NULL — emitting
+            // would let UI subscribers render an orange flag with no DB backing.
+            if !matches!(bucket, VerdictBucket::Filtered) {
+                let _ = app.emit(
+                    "substrate:intent_drift_changed",
+                    serde_json::json!({
+                        "uuid": decision.uuid,
+                        "verdict": parsed.verdict.as_db_str(),
+                        "confidence": parsed.confidence,
+                        "auto_applied": auto_applied,
+                        "priority_shift_id": priority_shift_id,
+                    }),
+                );
+            }
         }
     }
 
@@ -395,4 +424,96 @@ async fn run_claude_judge(
         ));
     }
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+#[cfg(test)]
+mod classify_tests {
+    use super::*;
+
+    #[test]
+    fn high_confidence_drifted_auto_applies() {
+        assert_eq!(
+            classify_verdict(Verdict::Drifted, 0.95),
+            VerdictBucket::AutoApplied
+        );
+    }
+
+    #[test]
+    fn boundary_drifted_at_0_85_auto_applies() {
+        // Inclusive lower bound at 0.85.
+        assert_eq!(
+            classify_verdict(Verdict::Drifted, 0.85),
+            VerdictBucket::AutoApplied
+        );
+    }
+
+    #[test]
+    fn drifted_just_under_0_85_surfaces_for_review() {
+        assert_eq!(
+            classify_verdict(Verdict::Drifted, 0.849),
+            VerdictBucket::Surfaced
+        );
+    }
+
+    #[test]
+    fn drifted_at_0_50_floor_surfaces() {
+        // Inclusive lower bound at 0.50.
+        assert_eq!(
+            classify_verdict(Verdict::Drifted, 0.50),
+            VerdictBucket::Surfaced
+        );
+    }
+
+    #[test]
+    fn drifted_below_0_50_is_filtered_not_surfaced() {
+        // Regression: previously the verdict-classification arm caught this
+        // before the noise-floor check, mis-tallying as Surfaced and emitting
+        // a substrate:intent_drift_changed event for a node whose DB state
+        // stayed NULL.
+        assert_eq!(
+            classify_verdict(Verdict::Drifted, 0.30),
+            VerdictBucket::Filtered
+        );
+    }
+
+    #[test]
+    fn needs_human_review_below_0_50_is_filtered_not_surfaced() {
+        // Same regression as above for NHR.
+        assert_eq!(
+            classify_verdict(Verdict::NeedsHumanReview, 0.30),
+            VerdictBucket::Filtered
+        );
+    }
+
+    #[test]
+    fn needs_human_review_above_floor_surfaces_regardless_of_confidence() {
+        // NHR never auto-applies, even at high confidence.
+        assert_eq!(
+            classify_verdict(Verdict::NeedsHumanReview, 0.95),
+            VerdictBucket::Surfaced
+        );
+    }
+
+    #[test]
+    fn confident_not_drifted_takes_no_action() {
+        assert_eq!(
+            classify_verdict(Verdict::NotDrifted, 0.95),
+            VerdictBucket::NoAction
+        );
+    }
+
+    #[test]
+    fn not_drifted_below_floor_is_filtered() {
+        assert_eq!(
+            classify_verdict(Verdict::NotDrifted, 0.30),
+            VerdictBucket::Filtered
+        );
+    }
+
+    #[test]
+    fn zero_confidence_always_filtered() {
+        for v in [Verdict::Drifted, Verdict::NotDrifted, Verdict::NeedsHumanReview] {
+            assert_eq!(classify_verdict(v, 0.0), VerdictBucket::Filtered);
+        }
+    }
 }
