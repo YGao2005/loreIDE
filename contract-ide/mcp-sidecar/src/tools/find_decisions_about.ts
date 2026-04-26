@@ -48,6 +48,7 @@ export async function findDecisionsAbout(args: z.infer<typeof inputSchema>) {
       JOIN substrate_nodes s ON s.uuid = fts.uuid
       WHERE substrate_nodes_fts MATCH ?
         AND s.invalid_at IS NULL
+        AND s.published_at IS NOT NULL
         AND s.node_type = 'decision'
       ORDER BY fts.rank
       LIMIT ?

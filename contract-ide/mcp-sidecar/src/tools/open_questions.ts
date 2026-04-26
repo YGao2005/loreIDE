@@ -41,7 +41,10 @@ export async function openQuestions(args: z.infer<typeof inputSchema>) {
         .prepare(
           `SELECT uuid, text, applies_when, scope, confidence, source_session_id, source_turn_ref
            FROM substrate_nodes
-           WHERE node_type = 'open_question' AND invalid_at IS NULL AND scope LIKE ?
+           WHERE node_type = 'open_question'
+             AND invalid_at IS NULL
+             AND published_at IS NOT NULL
+             AND scope LIKE ?
            ORDER BY valid_at DESC
            LIMIT ?`,
         )
@@ -50,7 +53,9 @@ export async function openQuestions(args: z.infer<typeof inputSchema>) {
         .prepare(
           `SELECT uuid, text, applies_when, scope, confidence, source_session_id, source_turn_ref
            FROM substrate_nodes
-           WHERE node_type = 'open_question' AND invalid_at IS NULL
+           WHERE node_type = 'open_question'
+             AND invalid_at IS NULL
+             AND published_at IS NOT NULL
            ORDER BY valid_at DESC
            LIMIT ?`,
         )
