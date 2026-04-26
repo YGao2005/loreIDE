@@ -1,0 +1,6 @@
+# Skill ships bundled deps per Phase 14 RESEARCH Pattern 5 + revision Issue 2.
+# node_modules IS committed — DO NOT add it here.
+# Only ignore transient build/test artifacts:
+.DS_Store
+*.log
+.vscode/

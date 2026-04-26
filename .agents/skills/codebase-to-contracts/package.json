@@ -1,0 +1,17 @@
+{
+  "name": "@contract-ide/codebase-to-contracts-skill",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Bootstrap a .contracts/ tree from any Next.js + Prisma + TS repo. Skill ships its own deps so it's self-contained at clone time.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test scripts/helpers/__tests__/"
+  },
+  "dependencies": {
+    "tinyglobby": "^0.2.0",
+    "js-yaml": "^4.1.0",
+    "@babel/parser": "^7.24.0",
+    "@babel/traverse": "^7.24.0",
+    "@babel/generator": "^7.24.0"
+  }
+}

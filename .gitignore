@@ -2,6 +2,11 @@
 node_modules/
 .pnpm-store/
 
+# Exception: skill ships bundled deps per Phase 14 RESEARCH Pattern 5
+# (self-contained at clone time — no `pnpm install` setup step).
+!.agents/skills/codebase-to-contracts/node_modules/
+!.agents/skills/codebase-to-contracts/node_modules/**
+
 # Day 0 artifacts not worth committing
 day0/check2-hook-payload/captures/
 day0/check2-hook-payload/test-workspace/
