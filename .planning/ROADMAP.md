@@ -334,7 +334,7 @@ Phases execute in numeric order; Phase 5 can run in parallel with Phase 3 after 
 | 10. Session Watcher + Filter Pipeline | 4/4 | Complete    | 2026-04-25 |
 | 11. Distiller + Constraint Store + Contract-Anchored Retrieval | 5/5 | Complete   | 2026-04-25 |
 | 12. Conflict / Supersession Engine | 4/4 | Complete   | 2026-04-25 |
-| 13. Substrate UI + New Visual Model + Demo Polish | 4/12 | In Progress|  |
+| 13. Substrate UI + New Visual Model + Demo Polish | 5/12 | In Progress|  |
 
 ### Phase 14: Codebase-to-Contracts Bootstrap (Skill + Demo Application)
 
