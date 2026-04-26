@@ -87,11 +87,30 @@ function badgeStyleFor(state: string | null): { bg: string; ring: string; label:
 }
 
 /**
+ * Substrate kind values — used to render a "substrate" kind chip so users can
+ * visually distinguish substrate hits from contract hits in the All view.
+ * (Contract hits show their level; substrate hits have no level — this fills
+ * the gap so the row doesn't look naked on the right side.)
+ */
+const SUBSTRATE_KINDS = new Set([
+  'constraint',
+  'decision',
+  'open_question',
+  'resolved_question',
+  'attempt',
+]);
+
+/**
  * Single palette row. The OUTER `<Command.Item>` lives in `IntentPalette.tsx`
  * — this component only renders the row contents.
+ *
+ * Phase 15 Plan 02: substrate hits in the All view get a "substrate" kind chip
+ * (right-aligned, muted) so they're visually distinguishable from contract
+ * hits. Skip if the existing level label is already present.
  */
 export function IntentPaletteHit({ hit }: { hit: IntentSearchHit }) {
   const badge = badgeStyleFor(hit.state);
+  const isSubstrate = SUBSTRATE_KINDS.has(hit.kind);
   return (
     <div className="flex items-center gap-2 py-0.5 min-w-0">
       <KindIcon kind={hit.kind} />
@@ -117,11 +136,18 @@ export function IntentPaletteHit({ hit }: { hit: IntentSearchHit }) {
           {badge.label}
         </span>
       )}
-      {hit.level && (
+      {/* Level pill for contract hits; "substrate" kind chip for substrate hits.
+          Both are right-aligned and muted — they identify the result type
+          without competing with the hit name for visual prominence. */}
+      {hit.level ? (
         <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70 shrink-0">
           {hit.level}
         </span>
-      )}
+      ) : isSubstrate ? (
+        <span className="text-[10px] text-muted-foreground/50 shrink-0">
+          substrate
+        </span>
+      ) : null}
     </div>
   );
 }

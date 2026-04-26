@@ -1,5 +1,7 @@
 /**
  * Phase 13 Plan 03 — Cmd+P semantic intent palette (SUB-08).
+ * Phase 15 Plan 02 — Filter chip row (All / Contracts / Code / Substrate) +
+ *                    Substrate-hit routing override (TRUST-01).
  *
  * Sibling-of-Cmd+K: the existing `CommandPalette.tsx` (Phase 1 SHELL-03)
  * stays unmodified. This component handles a separate Cmd+P keybinding that
@@ -24,11 +26,12 @@
  *       useGraphStore.pushParent(hit.parent_uuid)  (parent surface for L3 view)
  *       useGraphStore.setFocusedAtomUuid(hit.uuid) (chip halo target — plan 13-01)
  *   - Other contracts (L0–L3 non-flow): pushParent on the contract uuid itself.
- *   - Substrate hit (constraint / decision / open_question / resolved_question / attempt):
- *       use the canonical setter `useGraphStore.selectNode(parent_uuid)` so the
- *       Inspector opens on the atom the substrate node speaks to. Plan 13-07
- *       (chat archaeology modal) will refine this; for now, parent-contract
- *       selection is the right "land here, see context" behaviour.
+ *   - Substrate hit under "All" chip:
+ *       use `useGraphStore.selectNode(parent_uuid)` — Inspector opens on the atom.
+ *   - Substrate hit under "Substrate" chip (TRUST-01 override, Phase 15-02):
+ *       use `useCitationStore.openCitation(hit.uuid)` — SourceArchaeologyModal
+ *       opens directly, showing the verbatim quote and provenance metadata.
+ *       This is the <2s demo path per TRUST-01 SC.
  *
  * **Pitfall guard (research §Pitfall 2):** `e.preventDefault()` MUST run BEFORE
  * `setOpen` on the Cmd+P listener. macOS's default Cmd+P opens the system
@@ -38,6 +41,10 @@
  * **Canonical setter API (per plan 13-01 SUMMARY checker N7):** all graphStore
  * mutations use `selectNode` (NOT `setSelectedNode`) and `setFocusedAtomUuid`
  * (NOT raw `useGraphStore.setState({ focusedAtomUuid: ... })`).
+ *
+ * **Chip state:** `useState<ChipFilter>` local to this component. Resets to
+ * 'all' when the dialog closes. No Zustand store needed — chip selection is
+ * session-scoped (per-open) per plan 15-02 must_haves.
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -45,9 +52,18 @@ import { Command } from 'cmdk';
 import { findSubstrateByIntent, type IntentSearchHit } from '@/ipc/substrate';
 import { useGraphStore } from '@/store/graph';
 import { useSidebarStore } from '@/store/sidebar';
+import { useCitationStore } from '@/store/citation';
 import { isFlowContract, type ContractNode } from '@/ipc/types';
 import { IntentPaletteHit } from './IntentPaletteHit';
 import './commandPalette.css';
+
+/**
+ * Phase 15 Plan 02 — filter chip state type.
+ *
+ * 'all' is the default. When a non-all chip is selected, its value is passed as
+ * `kindFilter` to `findSubstrateByIntent` on the next debounced query.
+ */
+type ChipFilter = 'all' | 'contracts' | 'code' | 'substrate';
 
 /**
  * Resolve the flow contract whose `members` array contains the given uuid.
@@ -90,6 +106,12 @@ export function IntentPalette() {
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState<IntentSearchHit[]>([]);
   const [loading, setLoading] = useState(false);
+  /**
+   * Phase 15 Plan 02 — chip filter state. Resets to 'all' on close so each
+   * dialog open starts fresh (per must_haves: "chip state resets between dialog
+   * opens"). useState is sufficient — no Zustand needed for session-scoped UI.
+   */
+  const [chipFilter, setChipFilter] = useState<ChipFilter>('all');
 
   /**
    * Cmd+P / Ctrl+P keybinding. preventDefault BEFORE setOpen — see file-header
@@ -141,7 +163,16 @@ export function IntentPalette() {
     setLoading(true);
     const handle = setTimeout(async () => {
       try {
-        const result = await findSubstrateByIntent(query, QUERY_LIMIT);
+        // Phase 15 Plan 02: pass chipFilter as kindFilter when non-'all'.
+        // console.time guard for <2s TRUST-01 SC measurement (DEV only).
+        if (import.meta.env.DEV) {
+          console.time('substrate-cmdp-roundtrip');
+        }
+        const kindFilter = chipFilter === 'all' ? undefined : chipFilter;
+        const result = await findSubstrateByIntent(query, QUERY_LIMIT, kindFilter);
+        if (import.meta.env.DEV) {
+          console.timeEnd('substrate-cmdp-roundtrip');
+        }
         setHits(result);
       } catch (err) {
         // Non-fatal — the user just sees an empty list. Common cause: the
@@ -154,7 +185,7 @@ export function IntentPalette() {
       }
     }, QUERY_DEBOUNCE_MS);
     return () => clearTimeout(handle);
-  }, [query, open]);
+  }, [query, open, chipFilter]);
 
   /**
    * Reset palette state on close — query string, hits, loading flag. Without
@@ -167,6 +198,8 @@ export function IntentPalette() {
     setQuery('');
     setHits([]);
     setLoading(false);
+    // Phase 15 Plan 02: reset chip to 'all' so next open starts clean.
+    setChipFilter('all');
   }, []);
 
   /**
@@ -177,6 +210,11 @@ export function IntentPalette() {
    * stable across renders — cmdk memoises Command.Item children by props, so
    * an unstable onSelect would defeat the memoization and re-render the entire
    * list on every keystroke.
+   *
+   * Phase 15 Plan 02 (TRUST-01): substrate-hit routing override when the
+   * Substrate chip is active. In that mode, substrate hits open the
+   * SourceArchaeologyModal directly via useCitationStore.openCitation instead
+   * of navigating to the parent atom. This is the <2s demo path.
    */
   const handleSelect = useCallback(
     (hit: IntentSearchHit) => {
@@ -226,16 +264,39 @@ export function IntentPalette() {
         return;
       }
 
-      // Substrate hit — open the atom that the substrate node speaks to via
-      // the canonical setter (selectNode, NOT setSelectedNode per plan 13-01
-      // SUMMARY checker N7). Plan 13-07 (chat archaeology modal) will refine
-      // this with a substrate-detail surface; for now, parent-atom selection
-      // is the right "land here, see related substrate" behaviour.
+      // Substrate hit routing:
+      //
+      // Phase 15 Plan 02 (TRUST-01) OVERRIDE: when the Substrate chip is
+      // active, open the SourceArchaeologyModal directly so the user sees
+      // the verbatim quote immediately (<2s demo path). This is NOT the
+      // default behaviour — it only fires under the Substrate filter.
+      //
+      // Under the All chip (or any non-Substrate chip), preserve the
+      // existing parent-atom navigation so plan 13-03's per-kind contract
+      // stays intact (no regression to plan 13-03's navigation contract).
+      const isSubstrateKind =
+        hit.kind === 'constraint' ||
+        hit.kind === 'decision' ||
+        hit.kind === 'open_question' ||
+        hit.kind === 'resolved_question' ||
+        hit.kind === 'attempt';
+
+      if (isSubstrateKind && chipFilter === 'substrate') {
+        // Phase 15 Plan 02 TRUST-01 override — open modal directly.
+        // openCitation sets openCitationUuid which SourceArchaeologyModal
+        // subscribes to (Phase 13 Plan 07).
+        useCitationStore.getState().openCitation(hit.uuid);
+        return;
+      }
+
+      // Default substrate routing (All chip or other chips): open the atom
+      // the substrate node speaks to via the canonical setter (selectNode,
+      // NOT setSelectedNode per plan 13-01 SUMMARY checker N7).
       if (hit.parent_uuid) {
         useGraphStore.getState().selectNode(hit.parent_uuid);
       }
     },
-    [close],
+    [close, chipFilter],
   );
 
   return (
@@ -245,6 +306,36 @@ export function IntentPalette() {
       label="Find by intent"
       shouldFilter={false}
     >
+      {/* Phase 15 Plan 02 — filter chip row.
+          Sits above the cmdk Command.Input so the user picks the search scope
+          before typing. Active chip gets bg-secondary text-secondary-foreground;
+          others muted. Clicking a chip immediately re-fires the debounced query
+          (chipFilter is in the effect deps) so results refresh without waiting
+          for another keystroke. */}
+      <div
+        className="flex items-center gap-1.5 px-3 pt-2.5 pb-1.5"
+        role="group"
+        aria-label="Filter by kind"
+      >
+        {(['all', 'contracts', 'code', 'substrate'] as const).map((chip) => (
+          <button
+            key={chip}
+            type="button"
+            aria-pressed={chipFilter === chip}
+            onClick={() => setChipFilter(chip)}
+            className={[
+              'rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize transition-colors',
+              'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+              chipFilter === chip
+                ? 'bg-secondary text-secondary-foreground shadow-sm'
+                : 'text-muted-foreground hover:bg-muted/60',
+            ].join(' ')}
+          >
+            {chip === 'all' ? 'All' : chip.charAt(0).toUpperCase() + chip.slice(1)}
+          </button>
+        ))}
+      </div>
+
       {/* cmdk owns the input rendering — pass value/onValueChange so the
           hidden internal state stays in sync with the React state we drive
           the debounced query from. Don't try to set value via DOM — the
