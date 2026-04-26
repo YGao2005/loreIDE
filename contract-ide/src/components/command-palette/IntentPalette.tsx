@@ -63,7 +63,60 @@ import './commandPalette.css';
  * 'all' is the default. When a non-all chip is selected, its value is passed as
  * `kindFilter` to `findSubstrateByIntent` on the next debounced query.
  */
-type ChipFilter = 'all' | 'contracts' | 'code' | 'substrate';
+export type ChipFilter = 'all' | 'contracts' | 'code' | 'substrate';
+
+/**
+ * Maps a ChipFilter value to the optional kindFilter argument for
+ * `findSubstrateByIntent`. 'all' → undefined (no filter, existing behaviour).
+ *
+ * Exported for unit-testing (IntentPalette.test.ts case 1).
+ */
+export function resolveKindFilter(
+  chip: ChipFilter,
+): 'substrate' | 'contracts' | 'code' | undefined {
+  return chip === 'all' ? undefined : chip;
+}
+
+/**
+ * Substrate-node kind guard. Returns true for the five substrate node_type
+ * values; false for contract / flow / unknown kinds.
+ *
+ * Exported for unit-testing (IntentPalette.test.ts + IntentPaletteHit.tsx).
+ */
+export function isSubstrateKind(kind: string): boolean {
+  return (
+    kind === 'constraint' ||
+    kind === 'decision' ||
+    kind === 'open_question' ||
+    kind === 'resolved_question' ||
+    kind === 'attempt'
+  );
+}
+
+/**
+ * Resolves the routing decision for a substrate hit given the current chip filter.
+ *
+ * Returns:
+ *   - 'modal'     → call useCitationStore.openCitation(hit.uuid) (TRUST-01 path)
+ *   - 'inspector' → call useGraphStore.selectNode(hit.parent_uuid) (existing path)
+ *
+ * Conditions for 'modal':
+ *   1. The hit is a substrate kind (isSubstrateKind).
+ *   2. The Substrate chip is active (chipFilter === 'substrate').
+ *
+ * All other combinations fall back to 'inspector'.
+ *
+ * Exported for unit-testing (IntentPalette.test.ts cases 2 + 3).
+ */
+export function resolveSubstrateRoute(
+  hit: { kind: string },
+  chipFilter: ChipFilter,
+): 'modal' | 'inspector' {
+  if (isSubstrateKind(hit.kind) && chipFilter === 'substrate') {
+    return 'modal';
+  }
+  return 'inspector';
+}
 
 /**
  * Resolve the flow contract whose `members` array contains the given uuid.
@@ -164,12 +217,12 @@ export function IntentPalette() {
     const handle = setTimeout(async () => {
       try {
         // Phase 15 Plan 02: pass chipFilter as kindFilter when non-'all'.
+        // resolveKindFilter is the exported pure helper (tested in case 1).
         // console.time guard for <2s TRUST-01 SC measurement (DEV only).
         if (import.meta.env.DEV) {
           console.time('substrate-cmdp-roundtrip');
         }
-        const kindFilter = chipFilter === 'all' ? undefined : chipFilter;
-        const result = await findSubstrateByIntent(query, QUERY_LIMIT, kindFilter);
+        const result = await findSubstrateByIntent(query, QUERY_LIMIT, resolveKindFilter(chipFilter));
         if (import.meta.env.DEV) {
           console.timeEnd('substrate-cmdp-roundtrip');
         }
@@ -274,14 +327,12 @@ export function IntentPalette() {
       // Under the All chip (or any non-Substrate chip), preserve the
       // existing parent-atom navigation so plan 13-03's per-kind contract
       // stays intact (no regression to plan 13-03's navigation contract).
-      const isSubstrateKind =
-        hit.kind === 'constraint' ||
-        hit.kind === 'decision' ||
-        hit.kind === 'open_question' ||
-        hit.kind === 'resolved_question' ||
-        hit.kind === 'attempt';
+      //
+      // Uses resolveSubstrateRoute (exported pure helper, tested in
+      // IntentPalette.test.ts cases 2 + 3).
+      const routeDecision = resolveSubstrateRoute(hit, chipFilter);
 
-      if (isSubstrateKind && chipFilter === 'substrate') {
+      if (routeDecision === 'modal') {
         // Phase 15 Plan 02 TRUST-01 override — open modal directly.
         // openCitation sets openCitationUuid which SourceArchaeologyModal
         // subscribes to (Phase 13 Plan 07).
