@@ -102,7 +102,7 @@ Requirements for the hackathon demo release. Each maps to a roadmap phase.
 - [x] **DEMO-01**: `contract-ide-demo` repo (custom Next.js + Auth + Prisma + Stripe + Mailchimp scaffold) ships with the delete-account scenario per `.planning/demo/scenario-criteria.md` § Committed Scenario — planted `DangerActionButton`, `app/account/settings/page.tsx` + `app/team/[slug]/settings/page.tsx` scaffolds without delete buttons, `User`/`Workspace`/`Invoice`/`OrgInvoice` Prisma models, and ~20 ambient L1–L4 contracts plus the specific delete-account contracts (Account Settings L3 + DangerZone L4, Team Settings L3 + TeamDangerZone L4) committed to a seed directory. (`vercel/commerce` was the v1 target; superseded 2026-04-24 by the scenario re-lock.)
 - [x] **DEMO-02**: The four scripted demo beats per `.planning/demo/presentation-script.md` are reproducible end-to-end: PM contract trigger (Beat 1), recorded constraint-injection comparison (Beat 2), developer review with orange-flag supersession (Beat 3), closed-loop workspace-delete with harvest-back of two new substrate rules (Beat 4) — each backed by a SQLite reset fixture (5 seeded substrate rules + parent-surface no-modal-interrupts constraint + Q4-2025→2026-04-24 priority-shift record) restorable in one `git checkout` + one SQLite swap, reproducible 5 times in a row before filming
 - [x] **DEMO-03**: Bare-Claude baseline receipts are recorded and committed under reproducible conditions (same model, same repo commit, no MCP, no CLAUDE.md) for both demo prompts — `add a delete-account button to the account settings page` and `add a delete-workspace button to the team settings page` — captured *before* substrate seeding so context cannot leak; token + tool-call deltas verified favorable against the Contract IDE side
-- [ ] **DEMO-04**: 4-beat live demo runs end-to-end 3 times in a row clean before filming, including all four beats (PM trigger / recorded comparison / developer review with implicit-decisions group + orange flag / closed-loop workspace-delete with harvest-back including a promoted-from-implicit rule). Per-beat acceptance criteria all pass on each of the 3 runs; total runtime is 4:00 ± 5s; reset script (`contract-ide/demo/reset-demo.sh`) restores deterministic state in <10s; `runbook-v2.md` and `live-scenario.md` aligned to the locked 4-beat two-laptop structure
+- [x] **DEMO-04**: 4-beat live demo runs end-to-end 3 times in a row clean before filming, including all four beats (PM trigger / recorded comparison / developer review with implicit-decisions group + orange flag / closed-loop workspace-delete with harvest-back including a promoted-from-implicit rule). Per-beat acceptance criteria all pass on each of the 3 runs; total runtime is 4:00 ± 5s; reset script (`contract-ide/demo/reset-demo.sh`) restores deterministic state in <10s; `runbook-v2.md` and `live-scenario.md` aligned to the locked 4-beat two-laptop structure
 
 ### Visual Model — Vertical Flow Chain (Phase 13, added 2026-04-24)
 
@@ -252,7 +252,7 @@ Explicitly excluded. Documented to prevent scope creep.
 | JSX-01 | Phase 9 | Complete |
 | FLOW-01 | Phase 9 | Complete |
 | BACKEND-FM-01 | Phase 9 | Complete |
-| DEMO-04 | Phase 13 | Pending |
+| DEMO-04 | Phase 13 | Complete |
 | CARD-01 | Phase 13 | Complete (visual verification approved 2026-04-25 via plan 13-06 FlowChainLayout integration — ScreenCard mounts at top of vertical chain, iframe + atom chips render against running demo build) |
 | CARD-02 | Phase 13 | Complete |
 | CARD-03 | Phase 13 | Complete |
