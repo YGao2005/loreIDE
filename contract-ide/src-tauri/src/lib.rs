@@ -154,6 +154,11 @@ pub fn run() {
             // substrate entry above reset_demo). Do NOT reorder existing handlers.
             commands::substrate_trust::refine_substrate_rule,
             commands::substrate_trust::get_substrate_chain,
+            // Phase 15 Plan 04 — TRUST-03: delete path + impact preview IPC.
+            // Appended AFTER Plan 15-03's two substrate_trust entries per
+            // serialization-hint pattern — do NOT reorder existing handlers.
+            commands::substrate_trust::delete_substrate_rule,
+            commands::substrate_trust::get_substrate_impact,
         ])
         .setup(|app| {
             let window = app
