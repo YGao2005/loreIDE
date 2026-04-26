@@ -91,6 +91,9 @@ pub struct SubstrateNodeSummary {
     pub turn_ref: Option<String>,
     pub verbatim_quote: Option<String>,
     pub actor: Option<String>,
+    /// Phase 15 Plan 02 (folded from 15-03): pre-fill for RefineRuleEditor.
+    /// Only populated by `get_substrate_node_detail`; canvas bulk-read sets None.
+    pub applies_when: Option<String>,
     pub confidence: Option<String>,
 }
 
@@ -246,6 +249,10 @@ pub async fn get_substrate_states_for_canvas(
             turn_ref,
             verbatim_quote,
             actor,
+            // Canvas bulk read doesn't need applies_when — skip the column to
+            // keep the SELECT fast; 15-03's RefineRuleEditor reads it via
+            // get_substrate_node_detail instead.
+            applies_when: None,
             confidence,
         });
     }
@@ -269,14 +276,14 @@ pub async fn get_substrate_node_detail(
 
     let sql = if has_intent_col {
         r#"
-        SELECT uuid, node_type, text,
+        SELECT uuid, node_type, text, applies_when,
                source_session_id, source_turn_ref, source_quote, source_actor,
                confidence, invalid_at, intent_drift_state
         FROM substrate_nodes WHERE uuid = ?1 LIMIT 1
         "#
     } else {
         r#"
-        SELECT uuid, node_type, text,
+        SELECT uuid, node_type, text, applies_when,
                source_session_id, source_turn_ref, source_quote, source_actor,
                confidence, invalid_at,
                CAST(NULL AS TEXT) AS intent_drift_state
@@ -295,6 +302,7 @@ pub async fn get_substrate_node_detail(
     let uuid_out: String = r.try_get("uuid").map_err(|e| e.to_string())?;
     let kind: String = r.try_get("node_type").map_err(|e| e.to_string())?;
     let text: String = r.try_get("text").unwrap_or_default();
+    let applies_when: Option<String> = r.try_get("applies_when").ok();
     let session_id: Option<String> = r.try_get("source_session_id").ok();
     let turn_ref_int: Option<i64> = r.try_get("source_turn_ref").ok();
     let turn_ref = turn_ref_int.map(|v| v.to_string());
@@ -317,6 +325,7 @@ pub async fn get_substrate_node_detail(
         turn_ref,
         verbatim_quote,
         actor,
+        applies_when,
         confidence,
     }))
 }
@@ -451,11 +460,24 @@ fn build_fts_or_query(user_query: &str) -> String {
 /// **Defensive boots:** all reads short-circuit cleanly — if either FTS5
 /// virtual table is empty, we just skip its hits. If `substrate_nodes` itself
 /// is missing (Phase 11 migration not run), substrate hits return [].
+///
+/// **Phase 15 Plan 02 — `kind_filter` parameter (TRUST-01):**
+///   - `None` / `Some("all")` → existing behaviour (both FTS scans + merged results)
+///   - `Some("substrate")`    → substrate-only; skip contract FTS scan entirely.
+///     All `WHERE invalid_at IS NULL` predicates preserved — tombstoned rows don't surface.
+///   - `Some("contracts")`    → contracts-only; skip substrate FTS scan.
+///   - `Some("code")`         → same as "contracts" for now.
+///     TODO: Phase 16 code-only filter
+///
+/// **Performance target (TRUST-01 SC):** <2s from Cmd+P keystroke (Substrate
+/// chip active, query "why email confirmation") to first readable verbatim quote
+/// in SourceArchaeologyModal on demo SQLite.
 #[tauri::command]
 pub async fn find_substrate_by_intent(
     db_instances: State<'_, DbInstances>,
     query: String,
     limit: Option<i32>,
+    kind_filter: Option<String>,
 ) -> Result<Vec<IntentSearchHit>, String> {
     let limit = limit.unwrap_or(10).clamp(1, 50);
     let fts_match = build_fts_or_query(&query);
@@ -477,75 +499,93 @@ pub async fn find_substrate_by_intent(
 
     let mut hits: Vec<IntentSearchHit> = Vec::with_capacity(limit as usize * 2);
 
+    // Normalise kind_filter to a canonical mode string for branch dispatch.
+    //   None / Some("all") → "all"       (both contract FTS + substrate FTS)
+    //   Some("substrate")  → "substrate" (substrate FTS only)
+    //   Some("contracts")  → "contracts" (contract FTS only)
+    //   Some("code")       → "contracts" (TODO: Phase 16 code-only filter)
+    let filter_mode: &str = match kind_filter.as_deref() {
+        Some("substrate") => "substrate",
+        Some("contracts") | Some("code") => "contracts",
+        _ => "all",
+    };
+
     // ---------- Contract hits (nodes_fts) ----------
+    //
+    // Skip entirely when filter_mode == "substrate" (Substrate chip active).
     //
     // Cap contract hits at `limit` so the substrate slice still has room.
     // BM25 rank is the canonical sort key — sort ASC (most negative = best).
     // Tuple shape: (uuid, name, level, kind, parent_uuid?, body, fts_rank).
     // `body` is COALESCE(n.contract_body, '') so it's a non-NULL String to sqlx;
     // `parent_uuid` IS nullable on the nodes table so it stays Option<String>.
-    #[allow(clippy::type_complexity)]
-    let contract_rows: Vec<(
-        String,
-        String,
-        String,
-        String,
-        Option<String>,
-        String,
-        f64,
-    )> = sqlx::query_as(
-        r#"
-        SELECT n.uuid,
-               n.name,
-               n.level,
-               n.kind,
-               n.parent_uuid,
-               COALESCE(n.contract_body, '') AS body,
-               nodes_fts.rank AS fts_rank
-        FROM nodes_fts
-        JOIN nodes n ON n.uuid = nodes_fts.uuid
-        WHERE nodes_fts MATCH ?1
-          AND n.is_canonical = 1
-        ORDER BY nodes_fts.rank
-        LIMIT ?2
-        "#,
-    )
-    .bind(&fts_match)
-    .bind(limit as i64)
-    .fetch_all(&pool)
-    .await
-    .map_err(|e| format!("find_substrate_by_intent contract scan: {e}"))?;
+    if filter_mode != "substrate" {
+        // Contract FTS scan — skipped when Substrate chip is active.
+        #[allow(clippy::type_complexity)]
+        let contract_rows: Vec<(
+            String,
+            String,
+            String,
+            String,
+            Option<String>,
+            String,
+            f64,
+        )> = sqlx::query_as(
+            r#"
+            SELECT n.uuid,
+                   n.name,
+                   n.level,
+                   n.kind,
+                   n.parent_uuid,
+                   COALESCE(n.contract_body, '') AS body,
+                   nodes_fts.rank AS fts_rank
+            FROM nodes_fts
+            JOIN nodes n ON n.uuid = nodes_fts.uuid
+            WHERE nodes_fts MATCH ?1
+              AND n.is_canonical = 1
+            ORDER BY nodes_fts.rank
+            LIMIT ?2
+            "#,
+        )
+        .bind(&fts_match)
+        .bind(limit as i64)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| format!("find_substrate_by_intent contract scan: {e}"))?;
 
-    for (uuid, name, level, kind, parent_uuid, body, fts_rank) in contract_rows {
-        // Treat kind='flow' as a top-level navigation kind so the frontend
-        // can branch directly without a string-equals on a nested field.
-        let surface_kind = if kind == "flow" {
-            "flow".to_string()
-        } else {
-            "contract".to_string()
-        };
-        // Body summary capped to first ~200 chars for palette display; the
-        // full body is fetched on click via existing detail IPCs.
-        let summary = body.chars().take(200).collect::<String>();
-        hits.push(IntentSearchHit {
-            uuid,
-            kind: surface_kind,
-            level: Some(level),
-            name,
-            summary,
-            state: None,
-            parent_uuid,
-            // BM25 invert — most-negative becomes most-positive.
-            score: -fts_rank,
-        });
+        for (uuid, name, level, kind, parent_uuid, body, fts_rank) in contract_rows {
+            // Treat kind='flow' as a top-level navigation kind so the frontend
+            // can branch directly without a string-equals on a nested field.
+            let surface_kind = if kind == "flow" {
+                "flow".to_string()
+            } else {
+                "contract".to_string()
+            };
+            // Body summary capped to first ~200 chars for palette display; the
+            // full body is fetched on click via existing detail IPCs.
+            let summary = body.chars().take(200).collect::<String>();
+            hits.push(IntentSearchHit {
+                uuid,
+                kind: surface_kind,
+                level: Some(level),
+                name,
+                summary,
+                state: None,
+                parent_uuid,
+                // BM25 invert — most-negative becomes most-positive.
+                score: -fts_rank,
+            });
+        }
     }
 
     // ---------- Substrate hits ----------
     //
+    // Skip when filter_mode == "contracts" (Contracts chip active).
+    //
     // Try substrate_nodes_fts first (proper BM25 ranking on text+applies_when+scope).
     // If FTS yields no rows for this query, fall back to a LIKE scan so the user
     // sees something on a fresh DB where the FTS index hasn't picked up rows yet.
-    if substrate_table_exists(&pool).await? {
+    if filter_mode != "contracts" && substrate_table_exists(&pool).await? {
         let has_intent_col = intent_drift_column_present(&pool).await?;
 
         // Build FTS query first — try the full-text index. Note: substrate text

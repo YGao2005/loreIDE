@@ -48,6 +48,11 @@ export interface SubstrateNodeSummary {
   turn_ref: string | null;
   verbatim_quote: string | null;
   actor: string | null;
+  /**
+   * Phase 15 Plan 02 (folded from 15-03): pre-fill for RefineRuleEditor.
+   * Only populated by `get_substrate_node_detail`; canvas bulk-read always returns null.
+   */
+  applies_when: string | null;
   confidence: string | null;
 }
 
@@ -114,10 +119,24 @@ export interface IntentSearchHit {
  * "account settings danger" don't return zero hits under FTS5 default AND).
  *
  * Defensive: empty/whitespace-only queries return [].
+ *
+ * Phase 15 Plan 02 (TRUST-01): `kindFilter` parameter added.
+ *   - `undefined` / `'all'` → existing behaviour (both contract FTS5 + substrate).
+ *   - `'substrate'`         → substrate-only; used by the Substrate chip.
+ *   - `'contracts'`         → contracts-only.
+ *   - `'code'`              → contracts-only for now (TODO: Phase 16 code filter).
+ *
+ * Backward-compatible: existing call sites without `kindFilter` continue to
+ * behave identically (Rust receives None → "all" mode).
  */
 export async function findSubstrateByIntent(
   query: string,
   limit = 10,
+  kindFilter?: 'substrate' | 'contracts' | 'code' | 'all',
 ): Promise<IntentSearchHit[]> {
-  return invoke<IntentSearchHit[]>('find_substrate_by_intent', { query, limit });
+  return invoke<IntentSearchHit[]>('find_substrate_by_intent', {
+    query,
+    limit,
+    kindFilter,
+  });
 }
