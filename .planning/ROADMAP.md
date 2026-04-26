@@ -336,7 +336,7 @@ Phases execute in numeric order; Phase 5 can run in parallel with Phase 3 after 
 | 12. Conflict / Supersession Engine | 4/4 | Complete   | 2026-04-25 |
 | 13. Substrate UI + New Visual Model + Demo Polish | 11/12 | In Progress|  |
 | 14. Codebase-to-Contracts Bootstrap (Skill + Demo Application + In-IDE Affordance) | 5/9 | In Progress|  |
-| 15. Substrate Trust Surface (Cmd+P search · refine · delete with chained-version audit) | 1/6 | In Progress|  |
+| 15. Substrate Trust Surface (Cmd+P search · refine · delete with chained-version audit) | 2/6 | In Progress|  |
 
 ### Phase 14: Codebase-to-Contracts Bootstrap (Skill + Demo Application + In-IDE Affordance)
 
