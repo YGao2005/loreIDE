@@ -146,7 +146,9 @@ pub async fn compose_prompt(
 
 # Your task
 
-Implement the contract above. Honor every substrate rule whose `applies_when` matches the work. Cite the substrate rule by its index (e.g. "per [3]") in your reasoning when applying it. If a rule's applies_when does not match this contract, ignore it (the retrieval may be over-eager)."#,
+Implement the contract above. Honor every substrate rule whose `applies_when` matches the work. Cite the substrate rule by its index (e.g. "per [3]") in your reasoning when applying it. If a rule's applies_when does not match this contract, ignore it (the retrieval may be over-eager).
+
+**Exact values are exact.** When a substrate rule names a literal value — a color hex (`#FF0000`), a duration (`24h`, `30 days`), an identifier, an endpoint — apply that exact value verbatim. Do not paraphrase, round, or substitute a semantic equivalent (e.g. do NOT pick a Tailwind utility like `red-600` in place of `#FF0000`; do NOT pick `1d` in place of `24h`). The literal IS the rule."#,
         uuid = contract.uuid,
         name = contract.name,
         level = contract.level,
