@@ -550,5 +550,32 @@ WHERE session_id IS NOT NULL AND session_id != ''
 GROUP BY session_id;
 "#,
         kind: MigrationKind::Up,
+    },
+    // WARNING: v10 is immutable once shipped. Do NOT modify sql or description.
+    // Adds published_at to substrate_nodes so the demo "Sync" handshake gates
+    // retrieval — the distiller writes new rows with published_at=NULL ("captured
+    // but not yet visible to retrievers"), and the publish_pending_substrate IPC
+    // flips NULL → now() when the developer hits Pull on Sync Review.
+    //
+    // Backfills every existing row to its created_at (they're treated as
+    // already-published — pre-existing fixtures stay retrievable on first boot).
+    Migration {
+        version: 10,
+        description: "substrate_published_at_for_sync_gate",
+        sql: r#"
+ALTER TABLE substrate_nodes ADD COLUMN published_at TEXT;
+
+-- Backfill every existing row so retrieval sees them as published.
+-- New distiller writes use published_at=NULL until Sync flips it.
+UPDATE substrate_nodes
+SET published_at = COALESCE(created_at, valid_at, datetime('now'))
+WHERE published_at IS NULL;
+
+-- Partial index mirrors idx_substrate_nodes_active for the published-truth filter.
+CREATE INDEX IF NOT EXISTS idx_substrate_nodes_published
+    ON substrate_nodes(published_at)
+    WHERE published_at IS NOT NULL AND invalid_at IS NULL;
+"#,
+        kind: MigrationKind::Up,
     }]
 }

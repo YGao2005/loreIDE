@@ -72,6 +72,15 @@ pub struct SubstrateNode {
     /// to filter cousins out at FTS5 candidate-selection time. CONTEXT lock invariant.
     /// Defaults to '[]' if the distiller couldn't infer anchors.
     pub anchored_uuids: String,
+
+    /// NULL until the developer Sync handshake publishes the row (v10 migration).
+    /// Retrieval queries filter `published_at IS NOT NULL` so a captured-but-unsynced
+    /// rule never reaches an agent prompt before the demo's two-laptop handshake fires.
+    /// `#[sqlx(default)]` lets existing SELECTs that don't project this column still
+    /// deserialize cleanly — they treat the field as None — so we don't have to touch
+    /// every supersession / panel / history query that doesn't care about publication.
+    #[sqlx(default)]
+    pub published_at: Option<String>,
 }
 
 /// SubstrateEdge mirroring substrate_edges columns.
