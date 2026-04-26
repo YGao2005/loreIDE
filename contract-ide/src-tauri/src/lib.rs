@@ -137,6 +137,11 @@ pub fn run() {
             // missing-fixture state (Err with diagnostic, no panic).
             commands::demo_orchestration::load_beat3_verifier_fixture,
             commands::demo_orchestration::emit_beat4_harvest,
+            // Gap-closure: in-app Cmd+Shift+R hotkey support. Spawns
+            // contract-ide/demo/reset-demo.sh; the script's pkill cascade
+            // will SIGTERM this process before the child finishes, so the
+            // command returns Ok on successful spawn rather than waiting.
+            commands::reset_demo::reset_demo_state,
         ])
         .setup(|app| {
             let window = app

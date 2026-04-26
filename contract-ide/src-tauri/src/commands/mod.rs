@@ -21,6 +21,7 @@ pub mod pr_review;
 pub mod receipts;
 pub mod reconcile;
 pub mod repo;
+pub mod reset_demo;
 pub mod retrieval;
 pub mod rollup;
 pub mod screenshot;
