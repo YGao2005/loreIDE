@@ -586,3 +586,232 @@ pub async fn get_substrate_impact(
         recent_prompts,
     })
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 15 Plan 05 — TRUST-03 SC5 + TRUST-04: Restore path + tombstoned list
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Wire-shape for a tombstoned rule returned by `list_tombstoned_rules`.
+///
+/// `name` = first non-empty line of `text` — computed in Rust.
+/// `kind` = `node_type` column.
+/// `invalidated_at` = `invalid_at` column (ISO 8601).
+/// `invalidated_by` = actor who tombstoned the rule.
+#[derive(serde::Serialize)]
+pub struct TombstonedRule {
+    pub uuid: String,
+    /// First line of the rule's text — used as the display name in SubstrateHealthDialog.
+    pub name: String,
+    /// node_type value (constraint / decision / principle / …).
+    pub kind: String,
+    /// Full rule text.
+    pub text: String,
+    /// Compound reason string in format '<kind>: <text>' or free-form for legacy rows.
+    pub invalidated_reason: Option<String>,
+    /// ISO 8601 timestamp when the rule was tombstoned (= invalid_at column).
+    pub invalidated_at: Option<String>,
+    /// Actor who tombstoned the rule (e.g. 'human:yangg40@g.ucla.edu').
+    pub invalidated_by: Option<String>,
+}
+
+/// Derive a human-readable name from rule text: first non-empty line, capped at 80 chars.
+/// Falls back to uuid when text is blank or only whitespace.
+fn rule_name_from_text(text: &str, uuid: &str) -> String {
+    let first = text
+        .lines()
+        .find(|l| !l.trim().is_empty())
+        .unwrap_or("")
+        .trim();
+    if first.is_empty() {
+        uuid.to_string()
+    } else if first.len() > 80 {
+        format!("{}…", &first[..80])
+    } else {
+        first.to_string()
+    }
+}
+
+/// Phase 15 Plan 05 — List chain-head tombstones only (RESEARCH Pitfall 5 semantic).
+///
+/// Returns rules that are tombstoned AND have no later active version pointing at them.
+/// In a chain a→b→c where c is active, a and b are tombstoned but only b is the
+/// "final tombstone" of that chain (c's predecessor). This query surfaces only b —
+/// and if all three are tombstoned, it surfaces only c (the most recent tombstone
+/// with the highest invalid_at, as the ORDER BY invalid_at DESC + NOT IN guard picks
+/// the rightmost tombstone whose uuid is not referenced by an active row).
+///
+/// SQL semantics of the NOT IN subquery:
+///   "exclude any tombstoned row whose uuid appears as prev_version_uuid in an active row"
+/// An "active row" is one with invalid_at IS NULL. This correctly hides mid-chain
+/// tombstones (old versions superseded by a currently-active refinement).
+///
+/// LIMIT 100 guards against runaway result sets; the UI shows them all paginated.
+#[tauri::command]
+pub async fn list_tombstoned_rules(
+    app: tauri::AppHandle,
+) -> Result<Vec<TombstonedRule>, String> {
+    let pool = pool_clone(&app).await?;
+
+    let rows = sqlx::query(
+        r#"
+        SELECT uuid, node_type AS kind, text, invalidated_reason,
+               invalid_at AS invalidated_at, invalidated_by
+        FROM substrate_nodes
+        WHERE invalid_at IS NOT NULL
+          AND uuid NOT IN (
+              SELECT prev_version_uuid FROM substrate_nodes
+              WHERE prev_version_uuid IS NOT NULL AND invalid_at IS NULL
+          )
+        ORDER BY invalid_at DESC
+        LIMIT 100
+        "#,
+    )
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| format!("list_tombstoned_rules query: {e}"))?;
+
+    let mut result: Vec<TombstonedRule> = Vec::with_capacity(rows.len());
+    for row in &rows {
+        let uuid: String = row.try_get("uuid").map_err(|e| e.to_string())?;
+        let kind: String = row.try_get("kind").unwrap_or_default();
+        let text: String = row.try_get("text").map_err(|e| e.to_string())?;
+        let invalidated_reason: Option<String> = row.try_get("invalidated_reason").ok().flatten();
+        let invalidated_at: Option<String> = row.try_get("invalidated_at").ok().flatten();
+        let invalidated_by: Option<String> = row.try_get("invalidated_by").ok().flatten();
+        let name = rule_name_from_text(&text, &uuid);
+        result.push(TombstonedRule {
+            uuid,
+            name,
+            kind,
+            text,
+            invalidated_reason,
+            invalidated_at,
+            invalidated_by,
+        });
+    }
+
+    Ok(result)
+}
+
+/// Phase 15 Plan 05 — Atomic restore: clear tombstone + write substrate_edits audit row.
+///
+/// **Precondition checks (before transaction):**
+///   1. The row must exist: SELECT uuid, text, invalid_at WHERE uuid=?1.
+///      If None → Err("rule not found").
+///      If invalid_at IS NULL → Err("rule is already active — nothing to restore").
+///   2. Active-successor guard: SELECT COUNT(*) WHERE prev_version_uuid=?1 AND invalid_at IS NULL.
+///      If count > 0 → Err("cannot restore: chain has an active successor — restore would create two heads").
+///      (This prevents two active chain heads — a chain invariant violation.)
+///
+/// **Transaction (single sqlx transaction, all-or-nothing):**
+///   3. UPDATE substrate_nodes SET invalid_at=NULL, invalidated_reason=NULL,
+///      invalidated_by=NULL WHERE uuid=?1.
+///   4. INSERT substrate_edits row kind='restore':
+///      before_text=NULL, after_text=current text, reason='restored by <actor>'.
+///   5. COMMIT.
+///
+/// **FTS behavior:** The substrate_nodes_au trigger fires on UPDATE. Because
+/// new.invalid_at IS NULL after the restore, it removes the old (tombstoned) FTS
+/// entry and re-INSERTs the rule. Cmd+P substrate filter returns the rule again.
+///
+/// **No time limit on restore** (per ROADMAP Phase 15 SC5 explicit requirement).
+/// Actor format: "human:<email>" — hardcoded to yangg40@g.ucla.edu for v1.
+/// TODO(v2): read actor from settings / auth session.
+#[tauri::command]
+pub async fn restore_substrate_rule(
+    app: tauri::AppHandle,
+    uuid: String,
+    actor: String, // "human:<email>"
+) -> Result<(), String> {
+    let pool = pool_clone(&app).await?;
+
+    // ── Step 1: Read the row — must exist and be tombstoned ──────────────────
+    let row = sqlx::query(
+        "SELECT uuid, text, invalid_at FROM substrate_nodes WHERE uuid = ?1",
+    )
+    .bind(&uuid)
+    .fetch_optional(&pool)
+    .await
+    .map_err(|e| format!("restore_substrate_rule fetch: {e}"))?;
+
+    let Some(r) = row else {
+        return Err(format!("rule {uuid} not found"));
+    };
+
+    let invalid_at_val: Option<String> = r.try_get("invalid_at").ok().flatten();
+    if invalid_at_val.is_none() {
+        return Err("rule is already active — nothing to restore".to_string());
+    }
+
+    let current_text: String = r.try_get("text").map_err(|e| e.to_string())?;
+
+    // ── Step 2: Active-successor guard ───────────────────────────────────────
+    // Reject if any row with prev_version_uuid=this uuid is currently active.
+    // Restoring would create two active heads in the chain — a chain invariant violation.
+    let successor_count_row = sqlx::query(
+        "SELECT COUNT(*) AS cnt FROM substrate_nodes WHERE prev_version_uuid = ?1 AND invalid_at IS NULL",
+    )
+    .bind(&uuid)
+    .fetch_one(&pool)
+    .await
+    .map_err(|e| format!("restore_substrate_rule successor check: {e}"))?;
+
+    let successor_count: i64 = successor_count_row.try_get("cnt").unwrap_or(0);
+    if successor_count > 0 {
+        return Err(
+            "cannot restore: chain has an active successor — restore would create two heads"
+                .to_string(),
+        );
+    }
+
+    // ── Step 3-5: Transaction ─────────────────────────────────────────────────
+    let now = chrono::Utc::now().to_rfc3339();
+    let edit_id = uuid::Uuid::new_v4().to_string();
+    let restore_reason = format!("restored by {actor}");
+
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|e| format!("restore_substrate_rule begin tx: {e}"))?;
+
+    // UPDATE: clear the tombstone columns. After this UPDATE the FTS trigger
+    // fires — removes the (still-tombstoned) entry from FTS and re-INSERTs
+    // because new.invalid_at IS NULL post-update.
+    sqlx::query(
+        "UPDATE substrate_nodes \
+         SET invalid_at = NULL, invalidated_reason = NULL, invalidated_by = NULL \
+         WHERE uuid = ?1",
+    )
+    .bind(&uuid)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| format!("restore_substrate_rule UPDATE: {e}"))?;
+
+    // INSERT audit row.
+    // before_text = NULL  (the rule wasn't changed — it was just un-tombstoned)
+    // after_text  = current text (the rule's content at restore time)
+    // prev_version_uuid / new_version_uuid = NULL (restore doesn't create a chain row)
+    sqlx::query(
+        r#"
+        INSERT INTO substrate_edits (
+            edit_id, rule_uuid, prev_version_uuid, new_version_uuid,
+            actor, edited_at, before_text, after_text, reason, kind
+        ) VALUES (?1, ?2, NULL, NULL, ?3, ?4, NULL, ?5, ?6, 'restore')
+        "#,
+    )
+    .bind(&edit_id)
+    .bind(&uuid)
+    .bind(&actor)
+    .bind(&now)
+    .bind(&current_text)
+    .bind(&restore_reason)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| format!("restore_substrate_rule INSERT substrate_edits: {e}"))?;
+
+    tx.commit()
+        .await
+        .map_err(|e| format!("restore_substrate_rule commit: {e}"))?;
+
+    Ok(())
+}

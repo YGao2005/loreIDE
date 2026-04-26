@@ -159,6 +159,27 @@ pub fn run() {
             // serialization-hint pattern — do NOT reorder existing handlers.
             commands::substrate_trust::delete_substrate_rule,
             commands::substrate_trust::get_substrate_impact,
+            // Phase 15 Plan 05 — TRUST-03 SC5 + TRUST-04: restore path + tombstoned list.
+            // Appended AFTER Plan 15-04's two entries per serialization-hint pattern.
+            // Final order: refine → get_chain → delete → get_impact → list_tombstoned → restore.
+            commands::substrate_trust::list_tombstoned_rules,
+            commands::substrate_trust::restore_substrate_rule,
+            // Multi-chat tabs + History panel (Phase A — appended after all
+            // existing handlers per the serialization-hint pattern). One
+            // command per chat lifecycle stage; reconstruction (read JSONL
+            // for a closed chat) lives under chats::read_chat_jsonl in
+            // Phase D and will be appended below this block.
+            commands::chats::create_chat,
+            commands::chats::list_open_chats,
+            commands::chats::list_history_chats,
+            commands::chats::close_chat,
+            commands::chats::reopen_chat,
+            commands::chats::rename_chat,
+            commands::chats::update_chat_session_id,
+            commands::chats::touch_chat,
+            commands::chats::delete_chat,
+            commands::chats::get_chat_receipts,
+            commands::chats::get_chat_summaries,
         ])
         .setup(|app| {
             let window = app
