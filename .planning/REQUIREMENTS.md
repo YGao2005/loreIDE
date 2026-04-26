@@ -252,7 +252,7 @@ Explicitly excluded. Documented to prevent scope creep.
 | JSX-01 | Phase 9 | Complete |
 | FLOW-01 | Phase 9 | Complete |
 | BACKEND-FM-01 | Phase 9 | Complete |
-| DEMO-04 | Phase 13 | Complete |
+| DEMO-04 | Phase 13 | In Progress (13-10a data layer + 13-10b UI orchestration shipped 2026-04-25 — fixtures + IPCs + DemoOrchestrationPanel; full completion gates on 13-11 rehearsal validation: 3x end-to-end + cmdp-precision ≥8/10 + reset-script <10s) |
 | CARD-01 | Phase 13 | Complete (visual verification approved 2026-04-25 via plan 13-06 FlowChainLayout integration — ScreenCard mounts at top of vertical chain, iframe + atom chips render against running demo build) |
 | CARD-02 | Phase 13 | Complete |
 | CARD-03 | Phase 13 | Complete |

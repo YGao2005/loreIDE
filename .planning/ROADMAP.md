@@ -313,7 +313,7 @@ Plans:
 - [ ] 13-08-PLAN.md — Wave 4: PR-review intent-drift mode (PRReviewPanel + diffToNodeMapper + analyze_pr_diff IPC + Cmd+Shift+P binding) [SUB-09]
 - [ ] 13-09-PLAN.md — Wave 4: Sync affordance + IntentSummarySidebar (post-Sync, 6-line auto-generated, citation tokens wired to SC 7 halo) + VerifierPanel (with implicit-decisions group + orange flag halo on screen card) + ScopeRefinementPanel (priority history + Accept-with-note → Phase 12 fact-level supersession write + Phase 8 PROP-03 journal entry) + HarvestPanel (with promoted-from-implicit badge + N9 attached_to_uuid green halos) + HarvestNotification (Beat 4 "N nodes captured from this session" slide-in on session-close, click-through to chip/inspector) [SUB-09, SUB-08, SUB-06]
 - [ ] 13-10a-PLAN.md — Wave 5: Demo data layer (reset-demo.sh + substrate.sqlite.seed.sql + 3 fixture JSONs + sidecar README) [DEMO-04]
-- [ ] 13-10b-PLAN.md — Wave 5: Demo UI orchestration (Rust IPCs reading fixtures + DemoOrchestrationPanel + AppShell mount) [DEMO-04]
+- [x] 13-10b-PLAN.md — Wave 5: Demo UI orchestration (Rust IPCs reading fixtures + DemoOrchestrationPanel + AppShell mount) [DEMO-04]
 - [ ] 13-11-PLAN.md — Wave 6: Runbook v2 rewrite + live-scenario.md replacement + 3x end-to-end rehearsal + 13-UAT.md [DEMO-04]
 ## Progress
 
@@ -334,7 +334,7 @@ Phases execute in numeric order; Phase 5 can run in parallel with Phase 3 after 
 | 10. Session Watcher + Filter Pipeline | 4/4 | Complete    | 2026-04-25 |
 | 11. Distiller + Constraint Store + Contract-Anchored Retrieval | 5/5 | Complete   | 2026-04-25 |
 | 12. Conflict / Supersession Engine | 4/4 | Complete   | 2026-04-25 |
-| 13. Substrate UI + New Visual Model + Demo Polish | 10/13 | In Progress|  |
+| 13. Substrate UI + New Visual Model + Demo Polish | 11/12 | In Progress|  |
 
 ### Phase 14: Codebase-to-Contracts Bootstrap (Skill + Demo Application)
 
