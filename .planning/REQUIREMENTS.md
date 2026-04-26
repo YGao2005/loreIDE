@@ -253,14 +253,14 @@ Explicitly excluded. Documented to prevent scope creep.
 | FLOW-01 | Phase 9 | Complete |
 | BACKEND-FM-01 | Phase 9 | Complete |
 | DEMO-04 | Phase 13 | Pending |
-| CARD-01 | Phase 13 | In Progress (ScreenCard + AtomChipOverlay shipped 2026-04-25 plan 13-05; visual verification deferred to plan 13-06; state picker toolbar + section-bottom fallback gate on 13-06+13-10b) |
+| CARD-01 | Phase 13 | Complete (visual verification approved 2026-04-25 via plan 13-06 FlowChainLayout integration — ScreenCard mounts at top of vertical chain, iframe + atom chips render against running demo build) |
 | CARD-02 | Phase 13 | Complete |
 | CARD-03 | Phase 13 | Complete |
-| CHIP-01 | Phase 13 | In Progress (AtomChip + state-keyed CVA + focused halo + canonical selectNode/setFocusedAtomUuid setters shipped 2026-04-25 plan 13-05; visual verification deferred to plan 13-06; chip-to-element resolution chain gates on Phase 9 BABEL-01 + plan 13-06 + 13-10b section-bottom fallback) |
+| CHIP-01 | Phase 13 | Complete (visual verification approved 2026-04-25 via plan 13-06 — AtomChip + state-keyed CVA + focused halo verified end-to-end against demo build with BABEL-01 `data-contract-uuid` annotations; cross-origin postMessage protocol with requestId nonce + 500ms timeout shipped) |
 | CHIP-02 | Phase 13 | Complete |
 | CHIP-03 | Phase 13 | Complete |
-| CHAIN-01 | Phase 13 | Pending |
-| CHAIN-02 | Phase 13 | Pending |
+| CHAIN-01 | Phase 13 | Complete (assembleFlowChain pure function + FlowChainLayout shipped 2026-04-25 plan 13-06; deterministic vertical chain with screenCard-vs-serviceCard kind dispatch; user verified) |
+| CHAIN-02 | Phase 13 | Complete (CallShapeEdge + deriveCallShape shipped 2026-04-25 plan 13-06; matched-keys label vs `?` muted fallback; user verified) |
 | SIDEBAR-01 | Phase 13 | Complete |
 | SUB-01 | Phase 10 | Complete |
 | SUB-02 | Phase 10 | Complete |

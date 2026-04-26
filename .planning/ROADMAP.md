@@ -308,7 +308,7 @@ Plans:
 - [ ] 13-03-PLAN.md — Wave 2: Cmd+P intent palette (find_substrate_by_intent IPC + flow-aware landing + 10-query precision test fixture) [SUB-08]
 - [x] 13-04-PLAN.md — Wave 2: ServiceCard / EndpointCard backend-mode L3 trigger card (method-colored badges + Inputs/Outputs/Side-effects from BACKEND-FM-01 + ServiceCardChips) [CARD-02, CARD-03, CHIP-02]
 - [ ] 13-05-PLAN.md — Wave 2: ScreenCard UI-mode L3 trigger card (iframe + parent-layer chip overlay via postMessage/same-origin + Inspect/Interact toggle) [CARD-01, CHIP-01]
-- [ ] 13-06-PLAN.md — Wave 3: Vertical participant chain layout (assembleFlowChain + CallShapeEdge + iframe→screenshot fallback for two-flow case) [CHAIN-01, CHAIN-02, CHIP-02]
+- [x] 13-06-PLAN.md — Wave 3: Vertical participant chain layout (assembleFlowChain + CallShapeEdge + iframe→screenshot fallback for two-flow case) [CHAIN-01, CHAIN-02, CHIP-02]
 - [ ] 13-07-PLAN.md — Wave 4: Chat archaeology (SubstrateCitation pill + SourceArchaeologyModal + citation halo wiring across cards/chips) [SUB-08]
 - [ ] 13-08-PLAN.md — Wave 4: PR-review intent-drift mode (PRReviewPanel + diffToNodeMapper + analyze_pr_diff IPC + Cmd+Shift+P binding) [SUB-09]
 - [ ] 13-09-PLAN.md — Wave 4: Sync affordance + IntentSummarySidebar (post-Sync, 6-line auto-generated, citation tokens wired to SC 7 halo) + VerifierPanel (with implicit-decisions group + orange flag halo on screen card) + ScopeRefinementPanel (priority history + Accept-with-note → Phase 12 fact-level supersession write + Phase 8 PROP-03 journal entry) + HarvestPanel (with promoted-from-implicit badge + N9 attached_to_uuid green halos) + HarvestNotification (Beat 4 "N nodes captured from this session" slide-in on session-close, click-through to chip/inspector) [SUB-09, SUB-08, SUB-06]
@@ -334,7 +334,7 @@ Phases execute in numeric order; Phase 5 can run in parallel with Phase 3 after 
 | 10. Session Watcher + Filter Pipeline | 4/4 | Complete    | 2026-04-25 |
 | 11. Distiller + Constraint Store + Contract-Anchored Retrieval | 5/5 | Complete   | 2026-04-25 |
 | 12. Conflict / Supersession Engine | 4/4 | Complete   | 2026-04-25 |
-| 13. Substrate UI + New Visual Model + Demo Polish | 5/12 | In Progress|  |
+| 13. Substrate UI + New Visual Model + Demo Polish | 6/12 | In Progress|  |
 
 ### Phase 14: Codebase-to-Contracts Bootstrap (Skill + Demo Application)
 
