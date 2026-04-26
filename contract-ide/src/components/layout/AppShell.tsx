@@ -41,6 +41,7 @@ import { DemoOrchestrationPanel } from '@/components/dev/DemoOrchestrationPanel'
 // DevTools can stage Beat 3 manually. Plan 13-10b replaces with a UI panel.
 import '@/lib/demoOrchestration';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
+import { useResetHotkey } from '@/hooks/useResetHotkey';
 
 /**
  * IDE shell layout.
@@ -78,6 +79,9 @@ import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
  */
 export function AppShell() {
   useKeyboardShortcuts();
+  // Gap-closure: Cmd+Shift+R → reset_demo_state Tauri command. Pure
+  // stagecraft hotkey for multi-take filming; never leaves the IDE window.
+  useResetHotkey();
 
   // Phase 9 Plan 09-02: mass-edit trigger open state.
   // CommandPalette's "Mass edit by intent…" action flips this to true;
