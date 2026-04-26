@@ -37,7 +37,7 @@
  *     triggers re-render.
  */
 
-import { useEffect, useState, type RefObject } from 'react';
+import { useEffect, useMemo, useState, type RefObject } from 'react';
 import {
   requestChipRects,
   type ChipRect,
@@ -77,14 +77,22 @@ export function AtomChipOverlay({ iframeRef, parentUuid }: AtomChipOverlayProps)
   // Subscribe to graph nodes — when an L4 atom anchored to this screen is
   // added or removed, we want to re-fetch (the new atom's chip won't appear
   // until requestChipRects runs again).
-  // We filter inside the selector to keep the slice narrow; this means the
-  // component re-renders only when the count of matching atoms changes.
-  // (Identity-stable filtering: useMemo would help but we already use
-  // .length in the effect deps so the difference is negligible.)
-  const atoms = useGraphStore((s) =>
-    s.nodes.filter(
-      (n) => n.parent_uuid === parentUuid && n.level === 'L4',
-    ),
+  //
+  // CRITICAL: subscribe to the stable `s.nodes` array reference, then derive
+  // the filtered list via useMemo. A `s.nodes.filter(...)` selector returns a
+  // NEW array reference on every render, which under React 19 + Zustand 5's
+  // useSyncExternalStore triggers the "getSnapshot should be cached" warning
+  // and an infinite update loop ("Maximum update depth exceeded"). The store's
+  // `nodes` slice is replaced atomically on refresh (graphStore.refreshNodes
+  // does `set({ nodes: rows })`), so subscribing to it is identity-stable
+  // between fetches.
+  const allNodes = useGraphStore((s) => s.nodes);
+  const atoms = useMemo(
+    () =>
+      allNodes.filter(
+        (n) => n.parent_uuid === parentUuid && n.level === 'L4',
+      ),
+    [allNodes, parentUuid],
   );
 
   useEffect(() => {
