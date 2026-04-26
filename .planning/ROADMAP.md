@@ -335,14 +335,14 @@ Phases execute in numeric order; Phase 5 can run in parallel with Phase 3 after 
 | 11. Distiller + Constraint Store + Contract-Anchored Retrieval | 5/5 | Complete   | 2026-04-25 |
 | 12. Conflict / Supersession Engine | 4/4 | Complete   | 2026-04-25 |
 | 13. Substrate UI + New Visual Model + Demo Polish | 11/12 | In Progress|  |
-| 14. Codebase-to-Contracts Bootstrap (Skill + Demo Application + In-IDE Affordance) | 2/9 | In Progress |  |
+| 14. Codebase-to-Contracts Bootstrap (Skill + Demo Application + In-IDE Affordance) | 5/9 | In Progress|  |
 | 15. Substrate Trust Surface (Cmd+P search · refine · delete with chained-version audit) | 0/6 | Planned |  |
 
 ### Phase 14: Codebase-to-Contracts Bootstrap (Skill + Demo Application + In-IDE Affordance)
 
 **Goal:** Skill (Claude Code Agent Skills v1 package) that bootstraps any Next.js + Prisma + TypeScript repo into a `.contracts/` tree + substrate the IDE loads without manual cleanup, **demoable in-IDE as a real-time graph-population affordance** (replaces the empty state). Demonstrated end-to-end against a Yang-built micro-SaaS demo target.
 **Depends on:** Phase 13 (validators ship in Phase 9; visual-model lock in Phase 13 confirms what shape the skill must produce — both upstream)
-**Plans:** 2/9 plans executed
+**Plans:** 5/9 plans executed
 **Requirements:** [BOOTSTRAP-01, BOOTSTRAP-02, BOOTSTRAP-03, BOOTSTRAP-04, BOOTSTRAP-05, BOOTSTRAP-06, BOOTSTRAP-07]  (proposed; awaiting Yang ratification into REQUIREMENTS.md)
 
 **Demo posture (revised 2026-04-25):** in-IDE bootstrap is the load-bearing demo affordance. Empty state ("No contracts yet") is replaced by a "Bootstrap with Skill" CTA; clicking it runs the pipeline with real-time graph animation as nodes emerge from each stage. Recording captures this flow end-to-end. The 4-beat presentation script remains untouched; the bootstrap recording is a separately-runnable demo asset (no 5th beat) but is now substantive enough to also serve as the Q&A inset.
