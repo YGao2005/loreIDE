@@ -6,6 +6,13 @@ import { runAgent } from '@/ipc/agent';
 import { assembleScopeContext } from '@/lib/agent-prompt';
 import { cn } from '@/lib/utils';
 import { ChatStream } from '@/components/chat/ChatStream';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import type { ScopeContext } from '@/lib/agent-prompt';
 
 // Stable empty array reference for the streamBuffer fallback. Returning a
@@ -55,6 +62,7 @@ export function ChatPanel() {
     (s) => s.current?.streamBuffer ?? EMPTY_STREAM_BUFFER,
   );
   const userPrompt = useAgentStore((s) => s.current?.prompt ?? null);
+  const kickoff = useAgentStore((s) => s.current?.kickoff ?? null);
   const isRunning = agentStatus === 'running';
 
   // Load scope context when selected node changes.
@@ -156,7 +164,7 @@ export function ChatPanel() {
 
       {/* Streaming output pane */}
       <div className="flex-1 overflow-y-auto px-3 py-1 min-h-0">
-        {streamBuffer.length === 0 && !userPrompt && agentStatus === 'idle' && (
+        {streamBuffer.length === 0 && !userPrompt && !kickoff && agentStatus === 'idle' && (
           <div className="text-muted-foreground/50 text-[11px] pt-2 px-1">
             Type an intent below and press Send (or ⌘↵) to run the agent scoped to the selected node.
           </div>
@@ -165,6 +173,7 @@ export function ChatPanel() {
           lines={streamBuffer}
           userPrompt={userPrompt}
           isRunning={isRunning}
+          kickoff={kickoff}
         />
         <div ref={streamEndRef} />
       </div>
@@ -176,86 +185,189 @@ export function ChatPanel() {
         </div>
       )}
 
-      {/* Input area */}
-      <div className="border-t border-border/50 px-3 py-2 shrink-0">
-        {/* Model + effort pickers — tune latency per message. Defaults
-            (haiku + low) favor fast chat; bump for harder questions. */}
-        <div className="flex items-center gap-3 mb-1.5 text-[10px] text-muted-foreground/80">
-          <label className="flex items-center gap-1">
-            <span>Model</span>
-            <select
+      {/* Input area — composed surface. Compact triggers above, textarea
+          with embedded send below. Wrapped in a single subtle backdrop layer
+          so it reads as one unified card. */}
+      <div className="shrink-0 border-t border-border/40 bg-background/70 backdrop-blur-sm">
+        <div className="px-3 pt-2 pb-3">
+          {/* Triggers — pill-style dropdowns. Each shows its current value
+              with a chevron; click to open a Radix popover with full labels +
+              hint text. Compact form factor lets the textarea below take the
+              full panel width even at 28% of screen. */}
+          <div className="flex items-center gap-1.5 mb-2">
+            <Select
               value={model}
-              onChange={(e) => setModel(e.target.value as ModelChoice)}
+              onValueChange={(v) => setModel(v as ModelChoice)}
               disabled={isRunning}
-              className={cn(
-                'bg-muted/40 border border-border/60 rounded px-1.5 py-0.5',
-                'text-foreground/80 text-[10px] cursor-pointer',
-                'focus:outline-none focus:ring-1 focus:ring-ring',
-                'disabled:opacity-50 disabled:cursor-not-allowed',
-              )}
             >
-              <option value="haiku">Haiku</option>
-              <option value="sonnet">Sonnet</option>
-              <option value="opus">Opus</option>
-            </select>
-          </label>
-          <label className="flex items-center gap-1">
-            <span>Effort</span>
-            <select
+              <SelectTrigger
+                aria-label="Model"
+                className={cn(
+                  'h-6 px-2 py-0 gap-1.5 w-auto',
+                  'rounded-md border border-border/40 bg-muted/40',
+                  'text-[10px] font-medium text-foreground/80',
+                  'shadow-[inset_0_1px_0_rgba(255,255,255,0.4)] dark:shadow-none',
+                  'hover:bg-muted/70 hover:border-border/60',
+                  'data-[state=open]:bg-muted/80 data-[state=open]:border-border/80',
+                  'transition-colors duration-150',
+                  '[&>svg]:size-3 [&>svg]:opacity-50 [&>svg]:translate-y-[0.5px]',
+                )}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent
+                align="start"
+                className="min-w-[180px] rounded-lg border-border/50 shadow-lg"
+              >
+                {MODEL_OPTIONS.map((opt) => (
+                  <SelectItem
+                    key={opt.value}
+                    value={opt.value}
+                    className="text-[11px] py-1.5"
+                  >
+                    <div className="flex flex-col gap-0.5 py-0.5">
+                      <span className="font-medium leading-none">{opt.label}</span>
+                      <span className="text-[10px] text-muted-foreground/70 leading-none">
+                        {opt.hint}
+                      </span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select
               value={effort}
-              onChange={(e) => setEffort(e.target.value as EffortChoice)}
+              onValueChange={(v) => setEffort(v as EffortChoice)}
               disabled={isRunning}
+            >
+              <SelectTrigger
+                aria-label="Effort"
+                className={cn(
+                  'h-6 px-2 py-0 gap-1.5 w-auto',
+                  'rounded-md border border-border/40 bg-muted/40',
+                  'text-[10px] font-medium text-foreground/80',
+                  'shadow-[inset_0_1px_0_rgba(255,255,255,0.4)] dark:shadow-none',
+                  'hover:bg-muted/70 hover:border-border/60',
+                  'data-[state=open]:bg-muted/80 data-[state=open]:border-border/80',
+                  'transition-colors duration-150',
+                  '[&>svg]:size-3 [&>svg]:opacity-50 [&>svg]:translate-y-[0.5px]',
+                )}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent
+                align="start"
+                className="min-w-[180px] rounded-lg border-border/50 shadow-lg"
+              >
+                {EFFORT_OPTIONS.map((opt, i) => (
+                  <SelectItem
+                    key={opt.value}
+                    value={opt.value}
+                    className="text-[11px] py-1.5"
+                  >
+                    <div className="flex items-center gap-2 py-0.5">
+                      {/* Intensity bars — visualizes the scale from low to max. */}
+                      <span className="inline-flex items-center gap-[1.5px]" aria-hidden>
+                        {EFFORT_OPTIONS.map((_, j) => (
+                          <span
+                            key={j}
+                            className={cn(
+                              'h-2.5 w-[2px] rounded-full transition-colors',
+                              j <= i ? 'bg-teal-500' : 'bg-muted-foreground/25',
+                            )}
+                          />
+                        ))}
+                      </span>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-medium leading-none">{opt.label}</span>
+                        <span className="text-[10px] text-muted-foreground/70 leading-none">
+                          {opt.hint}
+                        </span>
+                      </div>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Textarea with embedded send button. Button is absolute-positioned
+              at bottom-right INSIDE the textarea well so the alignment is
+              deliberate (single composed input) rather than three loose
+              elements. Padding-right reserves space so typed text never
+              collides with the button. */}
+          <div className="relative">
+            <textarea
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Describe what you want the agent to do…"
+              disabled={isRunning}
+              rows={2}
               className={cn(
-                'bg-muted/40 border border-border/60 rounded px-1.5 py-0.5',
-                'text-foreground/80 text-[10px] cursor-pointer',
-                'focus:outline-none focus:ring-1 focus:ring-ring',
+                'block w-full resize-none rounded-lg bg-muted/30 border border-border/40 pl-3 pr-12 py-2',
+                'text-[13px] leading-snug text-foreground placeholder:text-muted-foreground/40',
+                'shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)]',
+                'transition-[background-color,border-color,box-shadow] duration-150',
+                'focus:outline-none focus:bg-muted/50 focus:border-border/70 focus:ring-2 focus:ring-ring/20',
                 'disabled:opacity-50 disabled:cursor-not-allowed',
               )}
+            />
+            <button
+              type="button"
+              onClick={() => void handleSend()}
+              disabled={isRunning || !prompt.trim()}
+              aria-label="Send message"
+              title={isRunning ? 'Agent is running…' : 'Send  ⏎'}
+              className={cn(
+                'group absolute right-2 bottom-2 inline-flex items-center justify-center size-7 rounded-md',
+                'transition-all duration-150 ease-out',
+                'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background',
+                isRunning || !prompt.trim()
+                  ? 'bg-transparent text-muted-foreground/40 cursor-not-allowed'
+                  : cn(
+                      'bg-gradient-to-b from-teal-500 to-teal-600 text-white',
+                      'shadow-[0_1px_2px_rgba(13,148,136,0.25),inset_0_1px_0_rgba(255,255,255,0.2)]',
+                      'hover:from-teal-400 hover:to-teal-500 hover:shadow-[0_2px_6px_rgba(13,148,136,0.35),inset_0_1px_0_rgba(255,255,255,0.24)]',
+                      'active:from-teal-600 active:to-teal-700 active:scale-[0.96] active:shadow-[0_1px_1px_rgba(13,148,136,0.2)]',
+                    ),
+              )}
             >
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-              <option value="xhigh">XHigh</option>
-              <option value="max">Max</option>
-            </select>
-          </label>
-        </div>
-        <div className="flex items-end gap-2">
-          <textarea
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Describe what you want the agent to do… (Enter to send, Shift+Enter for newline)"
-            disabled={isRunning}
-            rows={2}
-            className={cn(
-              'flex-1 resize-none rounded-md bg-muted/40 border border-border/60 px-3 py-2',
-              'text-xs text-foreground placeholder:text-muted-foreground/50',
-              'focus:outline-none focus:ring-1 focus:ring-ring',
-              'disabled:opacity-50',
-            )}
-          />
-          <button
-            type="button"
-            onClick={() => void handleSend()}
-            disabled={isRunning || !prompt.trim()}
-            aria-label="Send message"
-            title={isRunning ? 'Agent is running…' : 'Send (Enter)'}
-            className={cn(
-              'shrink-0 inline-flex items-center justify-center rounded-md size-9 transition-all',
-              isRunning || !prompt.trim()
-                ? 'bg-muted text-muted-foreground/60 cursor-not-allowed'
-                : 'bg-teal-500 text-white shadow-sm hover:bg-teal-600 active:scale-95',
-            )}
-          >
-            {isRunning ? (
-              <Loader2Icon className="size-4 animate-spin" />
-            ) : (
-              <SendHorizonalIcon className="size-4" />
-            )}
-          </button>
+              {isRunning ? (
+                <Loader2Icon className="size-3.5 animate-spin" />
+              ) : (
+                <SendHorizonalIcon className="size-3.5 transition-transform duration-150 group-hover:translate-x-px" />
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>
   );
 }
+
+// ───────────────────────────────────────────────────────────────────────────
+// Picker option metadata — mirrored on the trigger (label only) and in the
+// dropdown menu (label + hint + visual scale for effort).
+// ───────────────────────────────────────────────────────────────────────────
+
+interface PickerOption<V extends string> {
+  value: V;
+  label: string;
+  hint: string;
+}
+
+const MODEL_OPTIONS: readonly PickerOption<ModelChoice>[] = [
+  { value: 'haiku', label: 'Haiku', hint: 'Fast · low cost' },
+  { value: 'sonnet', label: 'Sonnet', hint: 'Balanced reasoning' },
+  { value: 'opus', label: 'Opus', hint: 'Deepest reasoning' },
+] as const;
+
+const EFFORT_OPTIONS: readonly PickerOption<EffortChoice>[] = [
+  { value: 'low', label: 'Low', hint: 'Snap replies' },
+  { value: 'medium', label: 'Medium', hint: 'Balanced thinking' },
+  { value: 'high', label: 'High', hint: 'Deep thinking' },
+  { value: 'xhigh', label: 'XHigh', hint: 'Exhaustive thinking' },
+  { value: 'max', label: 'Max', hint: 'No token limit' },
+] as const;

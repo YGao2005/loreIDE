@@ -1,6 +1,4 @@
 use serde::{Deserialize, Serialize};
-use std::io::Write;
-use std::process::{Command, Stdio};
 use tauri::AppHandle;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -22,145 +20,175 @@ pub struct DecisionPreview {
     pub chosen_value: String,
 }
 
+/// Planning pass: read the assembled compose prompt, return a StructuredPlan
+/// (target_files, substrate_rules, decisions_preview). Drives the Inspector's
+/// plan-review step before the user clicks Approve.
+///
+/// Backed by DeepSeek v4-flash chat-completions (json_object mode), non-thinking.
+/// Same vendor + key as retrieval/rerank.rs — see lib.rs::run for dotenvy
+/// loading. We dropped the `claude` CLI here for the same reason as rerank:
+/// internal LLM plumbing (parse one prompt → emit one structured object) was
+/// paying ~3-5s of CLI startup that the actual work didn't need. v4-flash
+/// returns this structure in ~2-5s end-to-end vs ~10-20s for the CLI path.
+///
+/// Why non-thinking: planning is structured-output, not open-ended reasoning.
+/// Thinking mode would emit reasoning_content tokens we discard, increase
+/// latency 2-5x, and disable temperature pinning. If plan quality slips on
+/// gnarlier contracts we can flip thinking on by setting type_: "enabled".
+///
+/// Schema enforcement: claude's `--json-schema` validates server-side; DeepSeek
+/// json_object mode returns *some* valid JSON but doesn't enforce our specific
+/// shape. We compensate by (a) describing the exact shape inline in the system
+/// prompt, (b) parsing into StructuredPlan via serde and surfacing clear errors
+/// when the model deviates.
+const DEEPSEEK_ENDPOINT: &str = "https://api.deepseek.com/chat/completions";
+const DEEPSEEK_MODEL: &str = "deepseek-v4-flash";
+const PLANNING_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+
+#[derive(Serialize)]
+struct ChatRequest<'a> {
+    model: &'a str,
+    messages: Vec<ChatMessage<'a>>,
+    temperature: f32,
+    max_tokens: u32,
+    /// Pin non-thinking — see module-level rationale.
+    thinking: ThinkingMode,
+    /// Guarantees `content` parses as JSON. The system prompt describes our
+    /// expected shape; serde catches any deviation.
+    response_format: ResponseFormat,
+}
+
+#[derive(Serialize)]
+struct ThinkingMode {
+    #[serde(rename = "type")]
+    type_: &'static str,
+}
+
+#[derive(Serialize)]
+struct ResponseFormat {
+    #[serde(rename = "type")]
+    type_: &'static str,
+}
+
+#[derive(Serialize)]
+struct ChatMessage<'a> {
+    role: &'a str,
+    content: &'a str,
+}
+
+#[derive(Deserialize)]
+struct ChatResponse {
+    choices: Vec<ChatChoice>,
+}
+
+#[derive(Deserialize)]
+struct ChatChoice {
+    message: ChatResponseMessage,
+}
+
+#[derive(Deserialize)]
+struct ChatResponseMessage {
+    content: String,
+}
+
 pub async fn run_planning_pass(
     _app: &AppHandle,
     assembled_prompt: &str,
 ) -> Result<StructuredPlan, String> {
-    let planning_directive = r#"PLANNING-ONLY MODE. You will produce a STRUCTURED PLAN, not code.
-Do not call Edit, Write, or MultiEdit tools.
-Do not modify any files.
-Read tools are permitted (Read, Glob, Grep) for understanding the task.
+    let api_key = std::env::var("DEEPSEEK_API_KEY")
+        .map_err(|_| {
+            "DEEPSEEK_API_KEY not set — required for delegate planning. \
+             Add it to src-tauri/.env (see .env.example)."
+                .to_string()
+        })?;
+    if api_key.is_empty() {
+        return Err("DEEPSEEK_API_KEY is set but empty".into());
+    }
 
-Output ONLY a JSON object matching the schema. No commentary, no code, no edits."#;
+    let system_prompt = r#"You are a coding-task planner. The user message contains a contract specification: intent, role, constraints, lineage context (parent surface + ancestors + sibling atoms), and ranked substrate rules retrieved from prior team sessions.
 
-    let schema = serde_json::json!({
-        "type": "object",
-        "properties": {
-            "target_files": { "type": "array", "items": {"type": "string"} },
-            "substrate_rules": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "required": ["uuid", "one_line"],
-                    "properties": {
-                        "uuid": {"type": "string"},
-                        "one_line": {"type": "string"}
-                    }
-                }
+PLANNING-ONLY MODE. Do NOT write code. Do NOT modify files. Output JSON ONLY.
+
+Output a JSON object with EXACTLY these three top-level keys (no others):
+
+{
+  "target_files": [<string>, ...],
+  "substrate_rules": [{"uuid": <string>, "one_line": <string>}, ...],
+  "decisions_preview": [{"key": <string>, "chosen_value": <string>}, ...]
+}
+
+Field semantics:
+- target_files: file paths the agent intends to edit or create. Be specific (e.g. "src/app/team/[slug]/members/page.tsx"), not directories.
+- substrate_rules: the substrate rules from the input that you'll cite while implementing this contract. Each entry: substrate rule's uuid (copy verbatim from input — do not invent) + a one-line restatement of why it applies to this contract. Pick the rules whose `applies_when` directly constrains the work; skip rules retrieval was over-eager about.
+- decisions_preview: 3-5 implicit decisions you anticipate making — defaults you'd pick that no substrate rule explicitly demands (e.g. "session_token_expiry_hours: 24"). Each entry: snake_case key + short chosen_value string.
+
+Output only the JSON object. No markdown fences, no commentary, no preamble."#;
+
+    let req = ChatRequest {
+        model: DEEPSEEK_MODEL,
+        messages: vec![
+            ChatMessage {
+                role: "system",
+                content: system_prompt,
             },
-            "decisions_preview": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "required": ["key", "chosen_value"],
-                    "properties": {
-                        "key": {"type": "string"},
-                        "chosen_value": {"type": "string"}
-                    }
-                }
-            }
+            ChatMessage {
+                role: "user",
+                content: assembled_prompt,
+            },
+        ],
+        // Deterministic across re-plans for the same prompt.
+        temperature: 0.0,
+        // StructuredPlan is small but assembled_prompt may cite many candidates;
+        // budget for a generous response while remaining bounded.
+        max_tokens: 4000,
+        thinking: ThinkingMode { type_: "disabled" },
+        response_format: ResponseFormat {
+            type_: "json_object",
         },
-        "required": ["target_files", "substrate_rules", "decisions_preview"]
-    });
-
-    // Pipe prompt via stdin (not -p arg) to avoid macOS argv size limits AND to give
-    // claude an explicit EOF on stdin — `claude -p` (no arg) reads from stdin and
-    // returns when stdin closes. Using -p with a positional argument leaves stdin
-    // piped-but-empty, which trips the "no stdin data received in 3s" warning and
-    // a non-zero exit on newer Claude CLI versions.
-    let prompt_owned = assembled_prompt.to_string();
-    let schema_str = schema.to_string();
-    let directive_owned = planning_directive.to_string();
-
-    // Lean-mode flags: skip MCP discovery + skills + session persistence, but
-    // keep OAuth/keychain auth (so we don't need ANTHROPIC_API_KEY). Cuts
-    // claude startup from ~15-20s (with full plugin/MCP roster) to ~3-5s.
-    // Trade-off vs --bare: still pays for keychain read + CLAUDE.md auto-discovery
-    // but skips the MCP servers + skill registry + session journaling.
-    let output_future = tokio::task::spawn_blocking(move || -> Result<std::process::Output, String> {
-        let mut child = Command::new("claude")
-            .args([
-                "-p",
-                "--append-system-prompt",
-                &directive_owned,
-                "--output-format",
-                "json",
-                "--json-schema",
-                &schema_str,
-                // Pin a fast model + low effort. Default routing may pick opus +
-                // medium thinking, which adds 20-40s of inference for a structured
-                // JSON output that doesn't need it.
-                "--model",
-                "sonnet",
-                "--effort",
-                "low",
-                "--strict-mcp-config",
-                "--mcp-config",
-                r#"{"mcpServers":{}}"#,
-                "--disable-slash-commands",
-                "--no-session-persistence",
-            ])
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|e| format!("planning claude spawn: {e}"))?;
-        if let Some(mut stdin) = child.stdin.take() {
-            stdin
-                .write_all(prompt_owned.as_bytes())
-                .map_err(|e| format!("planning stdin write: {e}"))?;
-        }
-        child
-            .wait_with_output()
-            .map_err(|e| format!("planning claude wait: {e}"))
-    });
-
-    // 90s hard timeout. Lean MCP flags don't skip CLAUDE.md auto-discovery,
-    // hooks, LSP init, or attribution lookups (--bare is the only flag that
-    // does, and it requires ANTHROPIC_API_KEY). For OAuth-keychain auth we
-    // budget headroom for those.
-    let output = match tokio::time::timeout(std::time::Duration::from_secs(90), output_future).await {
-        Err(_) => return Err("planning claude timed out after 90s".into()),
-        Ok(Err(e)) => return Err(format!("planning task join: {e}")),
-        Ok(Ok(Err(e))) => return Err(e),
-        Ok(Ok(Ok(out))) => out,
     };
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stdout_snip: String = stdout.chars().take(500).collect();
-        return Err(format!(
-            "planning claude exit code {}: stderr={:?} stdout_head={:?}",
-            output.status.code().unwrap_or(-1),
-            stderr.trim(),
-            stdout_snip,
-        ));
+    let client = reqwest::Client::new();
+    let send = client
+        .post(DEEPSEEK_ENDPOINT)
+        .bearer_auth(&api_key)
+        .json(&req)
+        .send();
+
+    let response = match tokio::time::timeout(PLANNING_TIMEOUT, send).await {
+        Err(_) => return Err("planning deepseek timed out after 60s".into()),
+        Ok(Err(e)) => return Err(format!("planning deepseek request failed: {e}")),
+        Ok(Ok(r)) => r,
+    };
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let body_snip: String = response
+            .text()
+            .await
+            .unwrap_or_default()
+            .chars()
+            .take(500)
+            .collect();
+        return Err(format!("planning deepseek HTTP {status}: {body_snip}"));
     }
 
-    // claude -p with --output-format json may signal API errors via is_error=true
-    // INSIDE the JSON body even when exit code is 0. Surface that explicitly so the
-    // user gets the underlying message instead of a downstream schema parse failure.
-    let response: serde_json::Value = serde_json::from_slice(&output.stdout)
-        .map_err(|e| format!("response parse: {e}"))?;
-    if response.get("is_error").and_then(|v| v.as_bool()) == Some(true) {
-        let msg = response
-            .get("result")
-            .and_then(|v| v.as_str())
-            .unwrap_or("(no result message)");
-        return Err(format!("planning claude API error: {msg}"));
-    }
+    let parsed: ChatResponse = response
+        .json()
+        .await
+        .map_err(|e| format!("planning response parse: {e}"))?;
 
-    // Try structured_output field first (json output format with schema)
-    let structured = response
-        .get("structured_output")
-        .cloned()
-        .or_else(|| {
-            // Fallback: try parsing the entire response as the plan directly
-            Some(response.clone())
-        })
-        .ok_or("missing structured_output")?;
+    let content = parsed
+        .choices
+        .first()
+        .map(|c| c.message.content.as_str())
+        .ok_or("planning response had no choices")?
+        .to_string();
 
-    serde_json::from_value::<StructuredPlan>(structured)
-        .map_err(|e| format!("plan parse: {e}"))
+    // json_object mode guarantees parseable JSON, but not our exact shape.
+    // Surface the head of the content on parse failure so the user can see
+    // what the model actually emitted (helps tune the system prompt).
+    serde_json::from_str::<StructuredPlan>(&content).map_err(|e| {
+        let head: String = content.chars().take(300).collect();
+        format!("plan JSON parse failed: {e}; content head: {head}")
+    })
 }

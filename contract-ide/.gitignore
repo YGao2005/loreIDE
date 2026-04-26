@@ -17,6 +17,10 @@ mcp-sidecar/node_modules/
 mcp-sidecar/dist/
 src-tauri/binaries/mcp-server-*
 
+# Local secrets — DEEPSEEK_API_KEY etc. (loaded via dotenvy in lib.rs::run).
+.env
+src-tauri/.env
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

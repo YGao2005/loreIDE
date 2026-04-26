@@ -20,6 +20,17 @@ use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Load .env via walk-up from cwd, falling back to CARGO_MANIFEST_DIR/.env
+    // if cwd at runtime is somewhere unexpected (app-bundle launches, IDE-
+    // spawned processes). Quiet on success; loud only on full failure so a
+    // missing-key diagnosis still surfaces in the dev terminal.
+    if dotenvy::dotenv().is_err() {
+        let fallback = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".env");
+        if let Err(e) = dotenvy::from_path(&fallback) {
+            eprintln!("[dotenv] not loaded (walk-up + fallback both failed): {e}");
+        }
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
@@ -102,6 +113,13 @@ pub fn run() {
             // that returns an error if invoked. Registered unconditionally
             // so JS callers always have a stable command name.
             commands::supersession::demo_force_intent_drift,
+            // 13-06 Beat 4 single-iframe budget. Currently STUB returning
+            // Err("not implemented"); JS caller falls back to same-origin
+            // captureIframeScreenshot() in src/lib/iframeScreenshot.ts. Wave
+            // 3 serialization_hint: 13-06 owns this addition; 13-08 will
+            // append analyze_pr_diff and 13-09 will append trigger_sync_animation
+            // in their own Wave 3 commits AFTER this one.
+            commands::screenshot::capture_route_screenshot,
         ])
         .setup(|app| {
             let window = app

@@ -1,17 +1,69 @@
 use crate::retrieval::SubstrateHit;
-use std::io::Write;
-use std::process::{Command, Stdio};
+use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
-/// LLM listwise rerank: top-15 candidates -> top-K (5 default).
-/// One `claude -p --bare` call. Defensive parser tolerates code-fence wrapping +
-/// out-of-bounds indices + duplicates.
+/// LLM listwise rerank: top-15 candidates -> top-K (5 default) via DeepSeek
+/// chat-completions API (OpenAI-compatible). One HTTP call per compose.
 ///
-/// Falls back to original FTS5 ordering if rerank parse fails entirely
-/// (insurance against LLM jitter).
+/// Why DeepSeek and not the `claude` CLI: the rerank is internal plumbing
+/// (turn 15 strings into a 5-index ordering), not a user-facing Claude Code
+/// session. Spawning the CLI cost ~3-5s of fixed startup (CLAUDE.md scan,
+/// LSP init, hooks, OAuth keychain) wrapping a ~500ms inference. Direct API
+/// is sub-second and ~$0.0001/call on v4-flash.
 ///
-/// Anti-pattern: NEVER call claude -p without --bare. Without --bare, MCP
-/// discovery + CLAUDE.md + skills add 1-3s latency and non-deterministic context.
+/// Model: deepseek-v4-flash (released 2026-04-24). 1M context, dual
+/// thinking/non-thinking modes. We pin non-thinking for rerank — the task is
+/// "order these 15 strings", no chain-of-thought needed and reasoning tokens
+/// would add latency + cost. Non-thinking also re-enables `temperature` (0.0
+/// gives deterministic ordering across calls).
+///
+/// Auth: reads `DEEPSEEK_API_KEY` from env (loaded via dotenvy in lib.rs::run).
+/// If missing, falls back to FTS5+RRF ordering — rerank is best-effort.
+///
+/// Defensive parser tolerates code-fence wrapping + out-of-bounds indices +
+/// duplicates; backfills missing slots from the original FTS5 ordering.
+const DEEPSEEK_ENDPOINT: &str = "https://api.deepseek.com/chat/completions";
+const DEEPSEEK_MODEL: &str = "deepseek-v4-flash";
+const RERANK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+
+#[derive(Serialize)]
+struct ChatRequest<'a> {
+    model: &'a str,
+    messages: Vec<ChatMessage<'a>>,
+    temperature: f32,
+    max_tokens: u32,
+    /// Pin non-thinking mode. Default may switch to thinking on v4-flash and
+    /// emit reasoning tokens we don't need.
+    thinking: ThinkingMode,
+}
+
+#[derive(Serialize)]
+struct ThinkingMode {
+    #[serde(rename = "type")]
+    type_: &'static str,
+}
+
+#[derive(Serialize)]
+struct ChatMessage<'a> {
+    role: &'a str,
+    content: &'a str,
+}
+
+#[derive(Deserialize)]
+struct ChatResponse {
+    choices: Vec<ChatChoice>,
+}
+
+#[derive(Deserialize)]
+struct ChatChoice {
+    message: ChatResponseMessage,
+}
+
+#[derive(Deserialize)]
+struct ChatResponseMessage {
+    content: String,
+}
+
 pub async fn llm_rerank(
     _app: &AppHandle,
     contract_body: &str,
@@ -25,8 +77,19 @@ pub async fn llm_rerank(
         return Ok(candidates.to_vec());
     }
 
-    // Pitfall 8: truncate contract_body to 800 chars to avoid input window blow-up
-    // on long Phase 8 rollup-stale L0 contracts.
+    // No key → graceful degradation to FTS5 ordering. The selector already
+    // produced a usable ranking via RRF; rerank is a quality boost, not a
+    // correctness requirement.
+    let api_key = match std::env::var("DEEPSEEK_API_KEY") {
+        Ok(k) if !k.is_empty() => k,
+        _ => {
+            eprintln!("[rerank] DEEPSEEK_API_KEY not set; using FTS5 ordering");
+            return Ok(candidates.iter().take(top_k).cloned().collect());
+        }
+    };
+
+    // Truncate contract body to keep token count predictable on long L0
+    // rollup-stale contracts (Pitfall 8 from the prior CLI implementation).
     let body_truncated = if contract_body.chars().count() > 800 {
         contract_body.chars().take(800).collect::<String>()
     } else {
@@ -66,65 +129,65 @@ Output ONLY a JSON array of indices like [3, 7, 1, 5, 2]. No commentary."#,
         n = candidates.len(),
     );
 
-    // Lean-mode flags: see plan_review.rs for rationale. Skips MCP/skills/persistence
-    // but keeps OAuth/keychain auth (no ANTHROPIC_API_KEY required).
-    let prompt_owned = prompt;
-    let output_future = tokio::task::spawn_blocking(move || -> Result<std::process::Output, String> {
-        let mut child = Command::new("claude")
-            .args([
-                "-p",
-                "--output-format",
-                "json",
-                // Pin haiku + low effort — rerank just orders a 15-item list,
-                // doesn't need opus thinking. Without the pin, default routing
-                // may pick opus + medium thinking and add 15-30s of inference.
-                "--model",
-                "haiku",
-                "--effort",
-                "low",
-                "--strict-mcp-config",
-                "--mcp-config",
-                r#"{"mcpServers":{}}"#,
-                "--disable-slash-commands",
-                "--no-session-persistence",
-            ])
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|e| format!("rerank claude spawn: {e}"))?;
-        if let Some(mut stdin) = child.stdin.take() {
-            stdin
-                .write_all(prompt_owned.as_bytes())
-                .map_err(|e| format!("rerank stdin write: {e}"))?;
-        }
-        child
-            .wait_with_output()
-            .map_err(|e| format!("rerank claude wait: {e}"))
-    });
-
-    // 30s hard timeout — fall back to FTS5 ordering if claude hangs.
-    let output = match tokio::time::timeout(std::time::Duration::from_secs(30), output_future).await {
-        Err(_) => {
-            eprintln!("[rerank] claude timed out after 30s; falling back to FTS5 order");
-            return Ok(candidates.iter().take(top_k).cloned().collect());
-        }
-        Ok(Err(e)) => return Err(format!("rerank task join: {e}")),
-        Ok(Ok(Err(e))) => return Err(e),
-        Ok(Ok(Ok(out))) => out,
+    let req = ChatRequest {
+        model: DEEPSEEK_MODEL,
+        messages: vec![ChatMessage {
+            role: "user",
+            content: &prompt,
+        }],
+        // Deterministic ordering: same candidates → same output every call.
+        // Only honored in non-thinking mode (thinking mode ignores temperature).
+        temperature: 0.0,
+        // 5 indices is ~15 tokens; small cap is fine since non-thinking mode
+        // doesn't emit reasoning_content.
+        max_tokens: 64,
+        thinking: ThinkingMode { type_: "disabled" },
     };
 
-    if !output.status.success() {
-        // Fallback: original ordering
-        eprintln!("[rerank] claude exit non-zero; falling back to FTS5 order");
+    let client = reqwest::Client::new();
+    let send = client
+        .post(DEEPSEEK_ENDPOINT)
+        .bearer_auth(&api_key)
+        .json(&req)
+        .send();
+
+    let response = match tokio::time::timeout(RERANK_TIMEOUT, send).await {
+        Err(_) => {
+            eprintln!("[rerank] deepseek timed out after 15s; using FTS5 ordering");
+            return Ok(candidates.iter().take(top_k).cloned().collect());
+        }
+        Ok(Err(e)) => {
+            eprintln!("[rerank] deepseek request failed: {e}; using FTS5 ordering");
+            return Ok(candidates.iter().take(top_k).cloned().collect());
+        }
+        Ok(Ok(r)) => r,
+    };
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let body_snip: String = response
+            .text()
+            .await
+            .unwrap_or_default()
+            .chars()
+            .take(200)
+            .collect();
+        eprintln!("[rerank] deepseek HTTP {status}: {body_snip}; using FTS5 ordering");
         return Ok(candidates.iter().take(top_k).cloned().collect());
     }
 
-    let response: serde_json::Value = serde_json::from_slice(&output.stdout)
-        .map_err(|e| format!("response parse: {e}"))?;
-    let result_text = response
-        .get("result")
-        .and_then(|v| v.as_str())
+    let parsed: ChatResponse = match response.json().await {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("[rerank] deepseek response parse failed: {e}; using FTS5 ordering");
+            return Ok(candidates.iter().take(top_k).cloned().collect());
+        }
+    };
+
+    let result_text = parsed
+        .choices
+        .first()
+        .map(|c| c.message.content.as_str())
         .unwrap_or("[]")
         .to_string();
 
@@ -139,7 +202,8 @@ Output ONLY a JSON array of indices like [3, 7, 1, 5, 2]. No commentary."#,
         .take(top_k)
         .collect();
 
-    // Backfill from original FTS5 ordering for any missing slots (insurance).
+    // Backfill from original FTS5 ordering for any missing slots (insurance
+    // against the model returning fewer than top_k indices).
     if ordered.len() < top_k {
         for (i, c) in candidates.iter().enumerate() {
             if seen.contains(&i) {

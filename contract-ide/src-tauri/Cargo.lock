@@ -607,6 +607,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "dashmap",
+ "dotenvy",
  "hex",
  "notify",
  "pulldown-cmark",

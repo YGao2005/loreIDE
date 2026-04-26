@@ -50,6 +50,9 @@ tokio = { version = "1", features = ["sync"] }
 pulldown-cmark = "0.13"
 thiserror = "1"
 regex = "1"
+# Loaded at startup so DEEPSEEK_API_KEY (used by retrieval/rerank.rs) can live
+# in a .env at the repo root or src-tauri/ instead of being exported per-shell.
+dotenvy = "0.15"
 
 [dev-dependencies]
 tempfile = "3"
