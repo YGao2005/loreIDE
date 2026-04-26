@@ -13,8 +13,18 @@
 // in 14-03/04/05 use this to mock the CLI.
 
 import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 
 const DEFAULT_MODEL = 'claude-sonnet-4-6';
+
+// Strip top-level keywords the Anthropic structured-output API rejects.
+// (`tools.N.custom.input_schema: input_schema does not support oneOf, allOf,
+// or anyOf at the top level`). The full schema — including these keywords —
+// is still enforced post-hoc by `validate.mjs` in Stage 5b.
+function stripUnsupportedTopLevel(schema) {
+  const { allOf: _a, oneOf: _o, anyOf: _y, ...rest } = schema;
+  return rest;
+}
 
 /**
  * Call `claude -p` with a structured-output schema and return the parsed
@@ -50,9 +60,11 @@ export async function callClaude({
     '--output-format', 'json',
     '--model', resolvedModel,
     '--allowedTools', allowedTools.join(','),
+    '--dangerously-skip-permissions',
   ];
   if (schemaPath) {
-    args.push('--json-schema', schemaPath);
+    const raw = JSON.parse(readFileSync(schemaPath, 'utf8'));
+    args.push('--json-schema', JSON.stringify(stripUnsupportedTopLevel(raw)));
   }
   if (systemPrompt) {
     args.push('--append-system-prompt', systemPrompt);
