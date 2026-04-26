@@ -246,8 +246,8 @@ pub async fn distill_episode(app: &AppHandle, episode_id: &str) -> Result<usize,
                (uuid, node_type, text, scope, applies_when,
                 valid_at, invalid_at, expired_at, created_at,
                 source_session_id, source_turn_ref, source_quote, source_actor,
-                confidence, episode_id, anchored_uuids)
-               VALUES (?,?,?,?,?, ?,NULL,NULL,?, ?,?,?,?, ?,?,?)"#,
+                confidence, episode_id, anchored_uuids, published_at)
+               VALUES (?,?,?,?,?, ?,NULL,NULL,?, ?,?,?,?, ?,?,?, NULL)"#,
         )
         .bind(&uuid)
         .bind(node_type)
