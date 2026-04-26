@@ -25,7 +25,11 @@ CREATE TABLE IF NOT EXISTS substrate_nodes (
   verbatim_quote TEXT,
   actor TEXT,
   confidence TEXT,
-  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  -- v10 migration adds this on the runtime substrate_nodes table; mirrored
+  -- here so the defensive-schema path (fresh DB without migrations) can
+  -- run the tail UPDATE that publishes every seeded row.
+  published_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS l0_priority_history (
@@ -164,5 +168,14 @@ INSERT INTO substrate_nodes (uuid, kind, state, name, summary, text, session_id,
 
 -- ---- Misc supporting state -------------------------------------------------
 -- Phase 11 may add more tables; this seed touches only substrate_nodes and l0_priority_history.
+
+-- Publish every seeded row so retrieval (which filters published_at IS NOT NULL
+-- per migration v10) sees these fixtures on first boot. Without this UPDATE, a
+-- fresh reset-demo.sh run would leave seed rules unpublished — locking them
+-- out of every agent surface until the developer hit Sync, which silently
+-- breaks Beat 2 of the demo. Both the defensive CREATE TABLE above and the
+-- runtime migrated schema carry published_at, so this UPDATE is always safe.
+UPDATE substrate_nodes
+SET published_at = COALESCE(published_at, created_at, valid_at, datetime('now'));
 
 PRAGMA user_version = 13;  -- bump so app knows this is the demo seed
