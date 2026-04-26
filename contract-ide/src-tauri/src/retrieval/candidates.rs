@@ -79,6 +79,7 @@ pub async fn candidate_selection(
             JOIN substrate_nodes s ON s.uuid = fts.uuid
             WHERE substrate_nodes_fts MATCH ?
               AND s.invalid_at IS NULL
+              AND s.published_at IS NOT NULL
               AND EXISTS (
                   SELECT 1 FROM json_each(s.anchored_uuids) je
                   WHERE je.value IN ({placeholders})
@@ -112,6 +113,7 @@ pub async fn candidate_selection(
                 JOIN substrate_nodes s ON s.uuid = fts.uuid
                 WHERE substrate_nodes_fts MATCH ?
                   AND s.invalid_at IS NULL
+                  AND s.published_at IS NOT NULL
                 ORDER BY fts.rank
                 LIMIT ?
                 "#,
@@ -174,6 +176,7 @@ async fn compute_cosine_top_n(
         FROM substrate_embeddings e
         JOIN substrate_nodes n ON n.uuid = e.uuid
         WHERE n.invalid_at IS NULL
+          AND n.published_at IS NOT NULL
         "#,
     )
     .fetch_all(pool)

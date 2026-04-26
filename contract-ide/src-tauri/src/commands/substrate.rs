@@ -611,6 +611,7 @@ pub async fn find_substrate_by_intent(
             JOIN substrate_nodes s ON s.uuid = substrate_nodes_fts.uuid
             WHERE substrate_nodes_fts MATCH ?1
               AND s.invalid_at IS NULL
+              AND s.published_at IS NOT NULL
             ORDER BY substrate_nodes_fts.rank
             LIMIT ?2
             "#
@@ -627,6 +628,7 @@ pub async fn find_substrate_by_intent(
             JOIN substrate_nodes s ON s.uuid = substrate_nodes_fts.uuid
             WHERE substrate_nodes_fts MATCH ?1
               AND s.invalid_at IS NULL
+              AND s.published_at IS NOT NULL
             ORDER BY substrate_nodes_fts.rank
             LIMIT ?2
             "#
@@ -664,6 +666,7 @@ pub async fn find_substrate_by_intent(
                        0.0 AS fts_rank
                 FROM substrate_nodes
                 WHERE invalid_at IS NULL
+                  AND published_at IS NOT NULL
                   AND text LIKE ?1
                 LIMIT ?2
                 "#
@@ -678,6 +681,7 @@ pub async fn find_substrate_by_intent(
                        0.0 AS fts_rank
                 FROM substrate_nodes
                 WHERE invalid_at IS NULL
+                  AND published_at IS NOT NULL
                   AND text LIKE ?1
                 LIMIT ?2
                 "#
