@@ -1,0 +1,22 @@
+{
+  "rows": [
+    { "kind": "honor", "ruleName": "Matches contract", "detail": "Delete Account action present in danger-zone section" },
+    { "kind": "honor", "ruleUuid": "dec-soft-delete-30day-grace-2026-02-18", "ruleName": "soft-delete-30day-grace", "detail": "deletedAt set, no hard delete" },
+    { "kind": "honor", "ruleUuid": "con-anonymize-not-delete-tax-held-2026-03-04", "ruleName": "anonymize-tax-held", "detail": "invoice updateMany present" },
+    { "kind": "honor", "ruleUuid": "con-stripe-customer-archive-2026-02-22", "ruleName": "stripe-archive", "detail": "customers.update with metadata" },
+    { "kind": "honor", "ruleUuid": "con-mailing-list-suppress-not-delete-2026-03-11", "ruleName": "mailchimp-suppress", "detail": "mailchimp suppress call" },
+    { "kind": "honor", "ruleUuid": "dec-confirm-via-email-link-2026-02-18", "ruleName": "email-link-confirmation", "detail": "sendDeletionConfirmationEmail call" }
+  ],
+  "implicitDecisions": [
+    { "field": "Email link expires in 24h", "derivedFrom": "agent default" },
+    { "field": "Audit log written to `audit_log` table", "derivedFrom": "inferred from project schema" },
+    { "field": "Cleanup runs as background job", "derivedFrom": "derived from contract.role \"primary action\"" }
+  ],
+  "flag": {
+    "kind": "flag",
+    "ruleUuid": "con-settings-no-modal-interrupts-2025-Q4",
+    "ruleName": "Parent surface holds con-settings-no-modal-interrupts-2025-Q4",
+    "detail": "(\"no modal interrupts on user actions\") — derived 2025-Q4 under priority `reduce-onboarding-friction`. Current priority since 2026-04-01 is `compliance-first`. The new modal interrupt may be intended; review.",
+    "parentSurfaceUuid": "PLACEHOLDER-screen-account-settings"
+  }
+}

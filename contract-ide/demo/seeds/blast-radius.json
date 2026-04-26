@@ -1,0 +1,12 @@
+{
+  "demo": "delete-account",
+  "trigger_uuid": "PLACEHOLDER-screen-account-settings",
+  "participant_uuids": [
+    "PLACEHOLDER-api-account-delete",
+    "PLACEHOLDER-lib-begin-account-deletion",
+    "PLACEHOLDER-external-stripe-customers-archive",
+    "PLACEHOLDER-external-mailchimp-suppress",
+    "PLACEHOLDER-lib-send-deletion-email"
+  ],
+  "_note": "Replace PLACEHOLDER-* uuids with the real uuids that Phase 9 generates when it seeds the contracts. Plan 13-11 rehearsal verifies this file resolves to existing nodes."
+}

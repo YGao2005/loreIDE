@@ -1,0 +1,28 @@
+{
+  "harvested_nodes": [
+    {
+      "uuid": "con-cascade-revoke-tokens-on-org-delete-2026-04-25",
+      "kind": "constraint",
+      "name": "Revoke member access tokens",
+      "text": "Revoke member access tokens immediately on org delete (don't wait for 30-day grace).",
+      "promoted_from_implicit": false,
+      "attached_to_uuid": "PLACEHOLDER-lib-revoke-all-member-tokens"
+    },
+    {
+      "uuid": "dec-owner-orphan-check-2026-04-25",
+      "kind": "decision",
+      "name": "Owner-orphan check before delete",
+      "text": "Org delete requires solo-owner OR explicit ownership transfer.",
+      "promoted_from_implicit": false,
+      "attached_to_uuid": "PLACEHOLDER-lib-assert-not-sole-owner"
+    },
+    {
+      "uuid": "dec-confirmation-timeout-24h-2026-04-25",
+      "kind": "decision",
+      "name": "Confirmation link timeout 24h",
+      "text": "Email confirmation links expire in 24h — agent default this morning, reviewer accepted, now a team rule.",
+      "promoted_from_implicit": true,
+      "attached_to_uuid": "PLACEHOLDER-lib-send-deletion-confirmation-email"
+    }
+  ]
+}
