@@ -177,7 +177,7 @@ export function staticCallChain({ triggerSource, triggerFile, allNodes, allFiles
 // e.g. `src/app/(auth)/login/page.tsx` -> `flow-auth-login-page`
 // ---------------------------------------------------------------------------
 
-function flowSlugFromTrigger(triggerFile) {
+function flowSlugFromTrigger(triggerFile, route) {
   // Strip the common Next.js prefixes (src/, app/, src/app/) and filename
   // suffixes (page.tsx, route.ts, etc.). Route groups like (auth) collapse
   // to nothing because they don't appear in the URL. The result is a slug
@@ -190,13 +190,28 @@ function flowSlugFromTrigger(triggerFile) {
     .replace(/^(page|route)\.(t|j)sx?$/, '')
     .replace(/\(([^)]*)\)\//g, '')   // strip route groups: (auth)/login -> login
     .replace(/[()]/g, '')
+    // Convert dynamic segments [id] -> id so they survive the path-separator collapse.
+    .replace(/\[([^\]]+)\]/g, '$1')
     .replace(/\.(t|j)sx?$/, '')
     .replace(/[\/.]+/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-+|-+$/g, '');
   if (!stem) stem = 'untitled';
+
+  // For API triggers with multiple methods on the same route.ts, prepend
+  // the HTTP method so each method gets a unique flow contract. The route
+  // string is "METHOD /path" (e.g. "DELETE /api/account") for API triggers
+  // and "/path" or null for UI/page triggers.
+  let methodPrefix = '';
+  if (typeof route === 'string') {
+    const methodMatch = route.match(/^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s/i);
+    if (methodMatch) {
+      methodPrefix = `${methodMatch[1].toLowerCase()}-`;
+    }
+  }
+
   // Slug cap; flow contracts don't need long names.
-  return `flow-${stem.slice(0, 60)}`;
+  return `flow-${methodPrefix}${stem.slice(0, 60)}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -374,7 +389,9 @@ export async function synthesizeFlows(repoPath, options = {}) {
 
     // 4. Compose the flow contract: deterministic UUIDv5 from
     // (repoName, `flow-<slug>`, 'L2:flow') so re-runs are idempotent.
-    const slug = flowSlugFromTrigger(trigger.file);
+    // Slug includes HTTP method for API triggers so multiple methods on
+    // the same route.ts emit distinct flow contracts.
+    const slug = flowSlugFromTrigger(trigger.file, trigger.route);
     const flowUuid = deterministicUuid(repoName, slug, 'L2:flow');
 
     const flowFm = {

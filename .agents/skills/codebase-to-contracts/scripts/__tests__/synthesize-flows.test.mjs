@@ -244,3 +244,14 @@ test('flowSlugFromTrigger: route group + page suffix stripped', () => {
   // Root page.tsx — no route segments left after stripping app/page.tsx.
   assert.equal(flowSlugFromTrigger('app/page.tsx'), 'flow-untitled');
 });
+
+test('flowSlugFromTrigger: API method prefix disambiguates multi-verb route.ts', () => {
+  // Multiple HTTP methods on the same route.ts file MUST produce distinct
+  // slugs (otherwise multiple flow contracts collide on the same UUID).
+  const file = 'src/app/api/notes/[id]/route.ts';
+  assert.equal(flowSlugFromTrigger(file, 'GET /api/notes/[id]'), 'flow-get-api-notes-id');
+  assert.equal(flowSlugFromTrigger(file, 'PUT /api/notes/[id]'), 'flow-put-api-notes-id');
+  assert.equal(flowSlugFromTrigger(file, 'DELETE /api/notes/[id]'), 'flow-delete-api-notes-id');
+  // UI triggers (no METHOD prefix in route) — slug stays method-less.
+  assert.equal(flowSlugFromTrigger('src/app/notes/[id]/page.tsx', '/notes/[id]'), 'flow-notes-id');
+});
